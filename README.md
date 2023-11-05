@@ -55,3 +55,8 @@ The primary motivation behind semantic segmentation is that it will allow for a 
 
 The biggest hindrance to this project is the lack of a pre-trained model for outdoor building data. I'm still working on finding a pre-trained model that can be used for this project, but it is likely that I will have to train a model from scratch. This is a time-consuming process, and I'm not sure if I will have enough time to do this. 
 If that does become the case, I will likely have to cut out the semantic segmentation step of the pipeline, and focus on the densification step. Even if only the densification step is completed, the pipeline will still be useful for improving the quality of the voxelization and mesh reconstruction of the UBC campus. Further steps will be taken in the densification if we are unable to perform semantic segmentation to improve the voxelization.
+
+Another hindrance is inherent to the LiDAR data itself. Dataset `483000_5454000.las` is missing color data associated with all points; all color values are set to 0.
+The reason for this is unknown; the following options are available as a workaround:
+- Ignore this dataset entirely in training and testing
+- Use and older dataset that has color data associated with all points. Right now the 2022 dataset is being used; the 2018 may be a viable workaround if there is no significant differences in the capturing technology or inherent dataset differences. 
