@@ -113,26 +113,6 @@ python test_semseg.py --log_dir pointnet2_sem_seg --test_area 5 --visual
 ```
 Visualization results will save in `log/sem_seg/pointnet2_sem_seg/visual/` and you can visualize these .obj file by [MeshLab](http://www.meshlab.net/).
 
-### Performance
-|Model  | Overall Acc |Class avg IoU | Checkpoint 
-|--|--|--|--|
-| PointNet (Pytorch) | 78.9 | 43.7| [40.7MB](log/sem_seg/pointnet_sem_seg) |
-| PointNet2_ssg (Pytorch) | **83.0** | **53.5**| [11.2MB](log/sem_seg/pointnet2_sem_seg) |
-
-## Visualization
-### Using show3d_balls.py
-```
-## build C++ code for visualization
-cd visualizer
-bash build.sh 
-## run one example 
-python show3d_balls.py
-```
-![](/visualizer/pic.png)
-### Using MeshLab
-![](/visualizer/pic2.png)
-
-
 ## Reference By
 [halimacc/pointnet3](https://github.com/halimacc/pointnet3)<br>
 [fxia22/pointnet.pytorch](https://github.com/fxia22/pointnet.pytorch)<br>

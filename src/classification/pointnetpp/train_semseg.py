@@ -29,10 +29,12 @@ seg_label_to_cat = {}
 for i, cat in enumerate(seg_classes.keys()):
     seg_label_to_cat[i] = cat
 
+
 def inplace_relu(m):
     classname = m.__class__.__name__
     if classname.find('ReLU') != -1:
-        m.inplace=True
+        m.inplace = True
+
 
 def parse_args():
     parser = argparse.ArgumentParser('Model')
@@ -62,7 +64,7 @@ def main(args):
 
     '''CREATE DIR'''
     timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
-    experiment_dir = Path('./log/')
+    experiment_dir = Path('log/')
     experiment_dir.mkdir(exist_ok=True)
     experiment_dir = experiment_dir.joinpath('sem_seg')
     experiment_dir.mkdir(exist_ok=True)
@@ -94,9 +96,11 @@ def main(args):
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area,
+                                 block_size=1.0, sample_rate=1.0, transform=None)
     print("start loading test data ...")
-    TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area,
+                                block_size=1.0, sample_rate=1.0, transform=None)
 
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=10,
                                                   pin_memory=True, drop_last=True,
@@ -153,8 +157,8 @@ def main(args):
 
     LEARNING_RATE_CLIP = 1e-5
     MOMENTUM_ORIGINAL = 0.1
-    MOMENTUM_DECCAY = 0.5
-    MOMENTUM_DECCAY_STEP = args.step_size
+    MOMENTUM_DECAY = 0.5
+    MOMENTUM_DECAY_STEP = args.step_size
 
     global_epoch = 0
     best_iou = 0
@@ -166,7 +170,7 @@ def main(args):
         log_string('Learning rate:%f' % lr)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
-        momentum = MOMENTUM_ORIGINAL * (MOMENTUM_DECCAY ** (epoch // MOMENTUM_DECCAY_STEP))
+        momentum = MOMENTUM_ORIGINAL * (MOMENTUM_DECAY ** (epoch // MOMENTUM_DECAY_STEP))
         if momentum < 0.01:
             momentum = 0.01
         print('BN momentum updated to: %f' % momentum)
@@ -257,7 +261,7 @@ def main(args):
             labelweights = labelweights.astype(np.float32) / np.sum(labelweights.astype(np.float32))
             mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
             log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
-            log_string('eval point avg class IoU: %f' % (mIoU))
+            log_string('eval point avg class IoU: %f' % mIoU)
             log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
             log_string('eval point avg class acc: %f' % (
                 np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
