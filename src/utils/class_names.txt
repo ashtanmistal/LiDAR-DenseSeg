@@ -1,0 +1,18 @@
+Unclassified
+Ground
+Low Vegetation
+Medium Vegetation
+High Vegetation
+Building
+Low Point (Noise)
+Reserved
+Water
+Rail
+Road Surface
+Reserved
+Wire - Guard (Shield)
+Wire - Conductor (Phase)
+Transmission Tower
+Wire-Structure Connector (Insulator)
+Bridge Deck
+High Noise
