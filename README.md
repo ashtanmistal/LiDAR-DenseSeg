@@ -9,23 +9,6 @@ This repository contains the code for my CPSC 533Y (Deep Learning with Visual Ge
 Consequently, the project is split into two parts: the first part is a point cloud densification pipeline, and the second part is a semantic segmentation pipeline. The two parts are independent of each other, and can be run separately.
 Nonetheless it is recommended to run the densification pipeline first, as a higher quality point cloud dataset will improve the quality of the segmentation pipeline.
 
-
-## Dependencies
-
-
-See `requirements.txt` for a list of software dependencies. The code was developed and tested on Windows 11 with Python 3.11 and CUDA 12.3. The code is not guaranteed to work on other platforms, but to my knowledge there is nothing in the code that is platform-specific.
-
-
-Hardware-wise, the code was developed and the models were trained on the following hardware:
-
-- CPU: Intel Core i7-13700K
-
-- GPU: NVIDIA GeForce RTX 4070 Ti (12 GB VRAM)
-
-- RAM: 48 GB
-
-Minimum storage requirements are around 100 GB, almost entirely due to the size of the LiDAR dataset.
-
 ## Densification Pipeline
 
 The densification is outlined as follows:
