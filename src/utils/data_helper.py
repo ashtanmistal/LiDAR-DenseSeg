@@ -35,7 +35,6 @@ def convert_to_pkl(las, output_path):
         "X": las.x,
         "Y": las.y,
         "Z": las.z,
-        "intensity": las.intensity,
         "r": las.red,
         "g": las.green,
         "b": las.blue,

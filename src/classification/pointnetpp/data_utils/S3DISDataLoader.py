@@ -175,9 +175,9 @@ if __name__ == '__main__':
     num_point, test_area, block_size, sample_rate = 4096, 5, 1.0, 0.01
 
     point_data = S3DISDataset(split='train', data_root=data_root, num_point=num_point, test_area=test_area, block_size=block_size, sample_rate=sample_rate, transform=None)
-    print('point data size:', point_data.__len__())
-    print('point data 0 shape:', point_data.__getitem__(0)[0].shape)
-    print('point label 0 shape:', point_data.__getitem__(0)[1].shape)
+    # print('point data size:', point_data.__len__())
+    # print('point data 0 shape:', point_data.__getitem__(0)[0].shape)
+    # print('point label 0 shape:', point_data.__getitem__(0)[1].shape)
     import torch, time, random
     manual_seed = 123
     random.seed(manual_seed)
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     def worker_init_fn(worker_id):
         random.seed(manual_seed + worker_id)
     train_loader = torch.utils.data.DataLoader(point_data, batch_size=16, shuffle=True, num_workers=16, pin_memory=True, worker_init_fn=worker_init_fn)
-    for idx in range(4):
+    for idx in range(4): 
         end = time.time()
         for i, (input, target) in enumerate(train_loader):
             print('time: {}/{}--{}'.format(i+1, len(train_loader), time.time() - end))
