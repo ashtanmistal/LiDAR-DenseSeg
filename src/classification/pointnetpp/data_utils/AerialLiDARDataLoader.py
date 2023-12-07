@@ -1,11 +1,13 @@
+import json
 import os
 import sys
-import torch, time, random
 import numpy as np
-from tqdm import tqdm
+import random
+import time
+import torch
+from shapely.geometry import shape, Point
 from torch.utils.data import Dataset
-import json
-from shapely.geometry import Polygon, MultiPolygon, shape, Point
+from tqdm import tqdm
 
 
 def farthest_point_sample(point, npoint):
@@ -52,9 +54,23 @@ def filter_points_in_polygon(points_with_index, geometry):
     # else:
     filtered = [(i, p) for i, p in points_with_index if Point(p[:2]).within(geometry)]
 
-        # Separating indices and points for return
+    # Separating indices and points for return
     indices, within_geometry = zip(*filtered) if filtered else ([], [])
     return list(within_geometry), list(indices)
+
+
+def calculate_label_weights(labels, num_classes):
+    # TODO this is broken - it looks to be one off from the actual number
+    class_counts = np.bincount(labels.astype(np.int32), minlength=num_classes)
+    class_weights = np.zeros(num_classes)
+    for i in range(num_classes):
+        if class_counts[i] == 0:
+            class_weights[i] = 0
+        else:
+            class_weights[i] = 1 / class_counts[i]
+    class_weights[9] = 0  # ignore the water class
+    class_weights = class_weights / np.sum(class_weights)
+    return class_weights
 
 
 class AerialLiDARDatasetWholeScene(Dataset):
@@ -66,22 +82,20 @@ class AerialLiDARDatasetWholeScene(Dataset):
     https://github.com/yanx27/Pointnet_Pointnet2_pytorch/blob/master/data_utils/S3DISDataLoader.py
     """
 
-    NUM_CLASSES = 17
+    NUM_CLASSES = 18
 
-    def __init__(self, split='train', file_path="data/data_label", data_root="data", num_point=1024, block_size=16.0,
-                 padding=0.001, process_data=False):
+    def __init__(self, split='train', file_path="data/data_label", data_root="data", num_point=2048, block_size=10.0,
+                 process_data=False):
         # TODO figure out what to do for the split
         """
         Initialize the dataset with the path to the .las file
         :param file_path: the path to the .las file
         :param num_point:
         :param block_size:
-        :param padding:
         """
         super().__init__()
         self.num_point = num_point
         self.block_size = block_size
-        self.padding = padding
         self.process_data = process_data
         file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         file_path = os.path.join(file_path, 'data', 'data_label', 'classified_merged_points.npy')
@@ -91,13 +105,13 @@ class AerialLiDARDatasetWholeScene(Dataset):
         # rgb right now is between 0 and 65535, so we need to make it between 0 and 255
         # make it a float first, then divide by 65535.0, then multiply by 255.0
         self.points[:, 3:6] = self.points[:, 3:6].astype(np.float32)
-        self.points[:, 3:6] = self.points[:, 3:6] / 65535.0
-        self.points[:, 3:6] = self.points[:, 3:6] * 255.0
+        # self.points[:, 3:6] = self.points[:, 3:6] / 65535.0
+        self.points[:, 3:6] = self.points[:, 3:6] * (255.0 / 65535.0)
         # turn the rgb values into integers
         self.points[:, 3:6] = self.points[:, 3:6].astype(np.int32)
         if self.points.shape[0] < self.num_point:
             raise ValueError('Dataset size must be larger than num_point.')
-        self.labelweights = self.calculate_label_weights(self.labels)
+        self.labelweights = calculate_label_weights(self.labels, self.NUM_CLASSES)
 
         self.save_path = os.path.join(data_root, 'buildings_split')
         if self.process_data:
@@ -124,8 +138,11 @@ class AerialLiDARDatasetWholeScene(Dataset):
                 elif building_polygon.geom_type == 'MultiPolygon':
                     # get bounds of the building
                     bbox = building_polygon.bounds
-                    points_with_index = [(i, p) for i, p in enumerate(self.points) if
-                                         bbox[0] <= p[0] <= bbox[2] and bbox[1] <= p[1] <= bbox[3]]
+                    points_array = np.array(self.points)
+                    mask = (points_array[:, 0] >= bbox[0]) & (points_array[:, 0] <= bbox[2]) & \
+                           (points_array[:, 1] >= bbox[1]) & (points_array[:, 1] <= bbox[3])
+                    filtered_points = points_array[mask]
+                    points_with_index = list(enumerate(filtered_points))
                     # filter points within the building
                     points_within_building, within_building = filter_points_in_polygon(points_with_index,
                                                                                        building_polygon)
@@ -155,21 +172,8 @@ class AerialLiDARDatasetWholeScene(Dataset):
                 self.list_of_points[index] = np.load(building_file)
                 self.list_of_labels[index] = np.load(building_labels_file)
 
-
-
-    def calculate_label_weights(self, labels, num_classes=NUM_CLASSES):
-        epsilon = 1e-6  # Small constant to prevent divide by zero
-        labelweights = np.histogram(labels, range(num_classes + 1))[0]
-        labelweights = labelweights.astype(np.float32)
-        labelweights += epsilon  # Add epsilon to each label weight
-        labelweights = labelweights / np.sum(labelweights)
-        # Adjust the weights to account for the class imbalance
-        labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
-        print("labelweights: ", labelweights)
-        return labelweights
-
     def __len__(self):
-        return self.points.shape[0] // self.num_point
+        return len(self.list_of_points)
 
     def __getitem__(self, idx):
         # TODO: We need to do the following:
@@ -179,14 +183,31 @@ class AerialLiDARDatasetWholeScene(Dataset):
         # - Then on the __getitem__ function,
         #   - we query the idx of the building, and *then* we can do the farthest point stuff
 
-        selected_points, selected_labels = self.list_of_points[idx], self.list_of_labels[idx]
-        sampled_points, sampled_labels = farthest_point_sample(selected_points, self.num_point)
-        center = np.mean(sampled_points, axis=0)
+        points, labels = self.list_of_points[idx], self.list_of_labels[idx]
+        N_points = points.shape[0]
 
+        while (True):
+            center = points[np.random.choice(N_points)][:3]
+            block_min = center - [self.block_size / 2.0, self.block_size / 2.0, 0]
+            block_max = center + [self.block_size / 2.0, self.block_size / 2.0, 0]
+            point_idxs = np.where(
+                (points[:, 0] >= block_min[0]) & (points[:, 0] <= block_max[0]) & (points[:, 1] >= block_min[1]) & (
+                            points[:, 1] <= block_max[1]))[0]
+            if point_idxs.size > self.num_point // 2:
+                break
+
+        if point_idxs.size >= self.num_point:
+            selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=False)
+        else:
+            selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=True)
+
+        # code isn't really working, let's add some asserts to see what's going on
+        assert selected_point_idxs.size == self.num_point
 
         # normalize the points; TODO check if this is the right way to do it
-        coord_max = np.max(selected_points[:, :3], axis=0)
+        selected_points = points[selected_point_idxs, :]  # num_point * 6
         current_points = np.zeros((self.num_point, 9))  # num_point * 9
+        coord_max = np.max(selected_points[:, :3], axis=0)
         current_points[:, 6] = selected_points[:, 0] / coord_max[0]  # x
         current_points[:, 7] = selected_points[:, 1] / coord_max[1]  # y
         current_points[:, 8] = selected_points[:, 2] / coord_max[2]  # z
@@ -194,9 +215,10 @@ class AerialLiDARDatasetWholeScene(Dataset):
         selected_points[:, 1] = selected_points[:, 1] - center[1]  # y
         selected_points[:, 3:6] /= 255.0
         current_points[:, 0:6] = selected_points
+        current_labels = labels[selected_point_idxs]  # num_point * 1
 
-        current_labels = np.zeros((self.num_point, 1))  # num_point * 1
-        current_labels[:, 0] = selected_labels
+        assert current_points.shape == (self.num_point, 9)
+        assert current_labels.shape == (self.num_point,)
 
         return current_points, current_labels
 

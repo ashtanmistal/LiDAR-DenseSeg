@@ -59,7 +59,25 @@ def index_points(points, idx):
     repeat_shape = list(idx.shape)
     repeat_shape[0] = 1
     batch_indices = torch.arange(B, dtype=torch.long).to(device).view(view_shape).repeat(repeat_shape)
-    new_points = points[batch_indices, idx, :]
+    # TODO range clamp
+    # TODO check for nans
+    # TODO run on cpu
+
+    # check for nans
+    nan_indices = torch.isnan(idx)
+    idx[nan_indices] = 0
+
+    # clamp
+    idx = torch.clamp(idx, min=0, max=points.shape[1] - 1)
+
+    try:
+        new_points = points[batch_indices, idx, :]  # erorr here
+    except:
+        print("Error: ", points.shape, batch_indices.shape, idx.shape)
+        # print EVERYTHING
+        print("Batch Indices: ", batch_indices)
+        print("Indices: ", idx)
+    # print("On Success: ", points.shape, batch_indices.shape, idx.shape)
     return new_points
 
 

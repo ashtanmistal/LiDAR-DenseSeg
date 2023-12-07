@@ -1,14 +1,15 @@
+Unclassified
 Ground
 Low Vegetation
 Medium Vegetation
 High Vegetation
 Building
 Low Point (Noise)
-Reserved
+Reserved1
 Water
 Rail
 Road Surface
-Reserved
+Reserved2
 Wire - Guard (Shield)
 Wire - Conductor (Phase)
 Transmission Tower

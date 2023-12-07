@@ -25,24 +25,24 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 classes = [
-    'Unclassified',
-    'Ground',
-    'Low Vegetation',
-    'Medium Vegetation',
-    'High Vegetation',
-    'Building',
-    'Low Point (Noise)',
-    'Reserved',
-    'Water',
-    'Rail',
-    'Road Surface',
-    'Reserved',
-    'Wire - Guard (Shield)',
-    'Wire - Conductor (Phase)',
-    'Transmission Tower',
-    'Wire-Structure Connector (Insulator)',
-    'Bridge Deck',
-    'High Noise',
+    "Unclassified",
+    "Ground",
+    "Low Vegetation",
+    "Medium Vegetation",
+    "High Vegetation",
+    "Building",
+    "Low Point (Noise)",
+    "Reserved1",
+    "Water",
+    "Rail",
+    "Road Surface",
+    "Reserved2",
+    "Wire - Guard (Shield)",
+    "Wire - Conductor (Phase)",
+    "Transmission Tower",
+    "Wire-Structure Connector (Insulator)",
+    "Bridge Deck",
+    "High Noise"
 ]
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
@@ -65,15 +65,15 @@ def parse_args():
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--model', type=str, default='pointnet2_sem_seg',
                         help='model name [default: pointnet2_sem_seg]')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during training [default: 8]')
-    parser.add_argument('--epoch', default=32, type=int, help='Epoch to run [default: 32]')
-    parser.add_argument('--learning_rate', default=0.001, type=float, help='Initial learning rate [default: 0.001]')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
+    parser.add_argument('--epoch', default=64, type=int, help='Epoch to run [default: 32]')
+    parser.add_argument('--learning_rate', default=0.0002, type=float, help='Initial learning rate [default: 0.002]')
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use [default: GPU 0]')
-    parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD [default: Adam]')
+    parser.add_argument('--optimizer', type=str, default='SGD', help='Adam or SGD [default: Adam]')
     parser.add_argument('--log_dir', type=str, default=None, help='Log path [default: None]')
-    parser.add_argument('--decay_rate', type=float, default=1e-4, help='weight decay [default: 1e-4]')
-    parser.add_argument('--npoint', type=int, default=4096, help='Point Number [default: 4096]')
-    parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
+    parser.add_argument('--decay_rate', type=float, default=1e-3, help='weight decay [default: 1e-4]')
+    parser.add_argument('--npoint', type=int, default=2048, help='Point Number [default: 4096]')
+    parser.add_argument('--step_size', type=int, default=5, help='Decay step for lr decay [default: every 5 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
 
     return parser.parse_args()
@@ -88,7 +88,8 @@ def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     '''CREATE DIR'''
-    timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
+    timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H'))  # TODO put the minutes back in
+    # timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
     experiment_dir = Path('log/')
     experiment_dir.mkdir(exist_ok=True)
     experiment_dir = experiment_dir.joinpath('sem_seg')
@@ -115,19 +116,19 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 17
+    NUM_CLASSES = 18
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = AerialLiDARDatasetWholeScene(split='train', process_data=True)
+    TRAIN_DATASET = AerialLiDARDatasetWholeScene(split='train', process_data=False)
     print("start loading test data ...")
     TEST_DATASET = AerialLiDARDatasetWholeScene(split='test')
 
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=0,
+    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=8,
                                                   pin_memory=True, drop_last=True,
                                                   worker_init_fn=worker_init_fn)
-    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=0,
+    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=8,
                                                  pin_memory=True, drop_last=True)
     weights = torch.Tensor(TRAIN_DATASET.labelweights).cuda()
 
@@ -226,6 +227,7 @@ def main(args):
             total_correct += correct
             total_seen += (BATCH_SIZE * NUM_POINT)
             loss_sum += loss
+
         log_string('Training mean loss: %f' % (loss_sum / num_batches))
         log_string('Training accuracy: %f' % (total_correct / float(total_seen)))
 
@@ -281,17 +283,17 @@ def main(args):
                     total_iou_deno_class[l] += np.sum(((pred_val == l) | (batch_label == l)))
 
             labelweights = labelweights.astype(np.float32) / np.sum(labelweights.astype(np.float32))
-            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
+            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6))
             log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
             log_string('eval point avg class IoU: %f' % mIoU)
             log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
             log_string('eval point avg class acc: %f' % (
-                np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
+                np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float32) + 1e-6))))
 
             iou_per_class_str = '------- IoU --------\n'
             for l in range(NUM_CLASSES):
                 iou_per_class_str += 'class %s weight: %.3f, IoU: %.3f \n' % (
-                    seg_label_to_cat[l] + ' ' * (14 - len(seg_label_to_cat[l])), labelweights[l - 1],
+                    seg_label_to_cat[l] + ' ' * (14 - len(seg_label_to_cat[l])), labelweights[l],
                     total_correct_class[l] / float(total_iou_deno_class[l]))
 
             log_string(iou_per_class_str)

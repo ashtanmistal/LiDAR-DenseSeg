@@ -34,6 +34,10 @@ def collect_point_label(out_filename, file_format='txt'):
     # xyz_min = np.amin(points, axis=0)[0:3]
     # points[:, 0:3] -= xyz_min
     xyzrgbl = np.concatenate((points, labels), axis=1)
+    # remove all points that are noise; we do not want to train on noise
+    # NOTE that this is making a big assumption that all of the noise
+    # has already been removed.
+    xyzrgbl = xyzrgbl[xyzrgbl[:, 6] != 6]  # 6 is the label for noise
 
     if file_format == 'txt':
         fout = open(out_filename, 'w')
