@@ -51,9 +51,9 @@ for i, cat in enumerate(seg_classes.keys()):
     seg_label_to_cat[i] = cat
 
 
+
 def worker_init_fn(worker_id):
     np.random.seed(worker_id + int(time.time()))
-
 
 def inplace_relu(m):
     classname = m.__class__.__name__
@@ -227,7 +227,7 @@ def main(args):
             total_correct += correct
             total_seen += (BATCH_SIZE * NUM_POINT)
             loss_sum += loss
-
+            
         log_string('Training mean loss: %f' % (loss_sum / num_batches))
         log_string('Training accuracy: %f' % (total_correct / float(total_seen)))
 
@@ -289,6 +289,7 @@ def main(args):
             log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
             log_string('eval point avg class acc: %f' % (
                 np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float32) + 1e-6))))
+
 
             iou_per_class_str = '------- IoU --------\n'
             for l in range(NUM_CLASSES):

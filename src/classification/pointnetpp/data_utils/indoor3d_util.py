@@ -349,3 +349,4 @@ def room2samples_wrapper_normalized(data_label_filename, num_point):
         print('Unknown file type! exiting.')
         exit()
     return room2samples_plus_normalized(data_label, num_point)
+  

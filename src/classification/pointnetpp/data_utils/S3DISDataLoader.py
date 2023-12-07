@@ -37,7 +37,6 @@ class S3DISDataset(Dataset):
         labelweights = labelweights / np.sum(labelweights)
         self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
         print(self.labelweights)
-
         sample_prob = num_point_all / np.sum(num_point_all)
         num_iter = int(np.sum(num_point_all) * sample_rate / num_point)
         room_idxs = []
@@ -188,7 +187,7 @@ if __name__ == '__main__':
     def worker_init_fn(worker_id):
         random.seed(manual_seed + worker_id)
     train_loader = torch.utils.data.DataLoader(point_data, batch_size=16, shuffle=True, num_workers=16, pin_memory=True, worker_init_fn=worker_init_fn)
-    for idx in range(4):  # why 4?
+    for idx in range(4): 
         end = time.time()
         for i, (input, target) in enumerate(train_loader):
             print('time: {}/{}--{}'.format(i+1, len(train_loader), time.time() - end))
