@@ -12,7 +12,6 @@ from sklearn.neighbors import KDTree
 import torch.nn.functional as F
 import os
 
-MAX_NUM_POINTS = 4*131072
 
 def rotation_matrix_from_vectors(vec1, vec2):
     """ Find the rotation matrix that aligns vec1 to vec2
@@ -50,22 +49,9 @@ class Generator3D6(object):
         tree1 = KDTree(data)
 
         print("generate seedpoint")
-        if len(data) > MAX_NUM_POINTS:
-            raise ValueError('The number of points should be less than %d' % MAX_NUM_POINTS)
-        data2 = []
-        start_l = 0.004
-        l = start_l
-        start_dl = 0.011
-        start_du = 0.015
-        dl = start_dl
-        i = 0
-        # while len(data2) < 1:
-        #     i = i + 1
         wq = "dense.exe"
-        #     dl = dl * 1.5
-        #     du = 2 * dl
-        #     l = l * 1.5
-        wq = wq + " " + str(start_l) + " " + str(data.shape[0]) + " " + str(start_dl) + " " + str(start_du)
+        wq = wq + " 0.004 " + str(data.shape[0])
+
         print(wq)
         os.system(wq)
         data2 = np.loadtxt("target.xyz")
@@ -76,8 +62,11 @@ class Generator3D6(object):
         p_split = np.array_split(xyz2, pp, axis=0)
         normal = None
         for i in tqdm(range(len(p_split))):
-
-            dist, idx = tree1.query(p_split[i], 100)
+            try:
+                dist, idx = tree1.query(p_split[i], 100)
+            except:
+                print("error")
+                continue
             cloud = data[idx]
             cloud = cloud - np.tile(np.expand_dims(p_split[i], 1), (1, 100, 1))
             with torch.no_grad():

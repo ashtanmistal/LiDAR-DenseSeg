@@ -1,5 +1,5 @@
 
-//#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
 #include <cstdio>
 #include <cstring>
@@ -8,9 +8,7 @@
 #include <unordered_map>
 #include <algorithm>
 using namespace std;
-int k = 10, idx;
-constexpr int MAX_NUM_POINTS = 8*131072;
-constexpr int MAX_KD_TREE_SIZE = 4 * MAX_NUM_POINTS;
+int k = 3, idx;  
 
 struct Vector3
 {
@@ -63,15 +61,15 @@ struct Vector3
     {
         return xyz[idx] < u.xyz[idx];
     }
-}po[MAX_NUM_POINTS];
+}po[5001];
 
 
 priority_queue<pair<double, Vector3>>nq;
 
 struct kdTree
 {
-    Vector3 pt[MAX_KD_TREE_SIZE];
-    int son[MAX_KD_TREE_SIZE];
+    Vector3 pt[20004];
+    int son[20004];
 
     void build(int l, int r, int rt = 1, int dep = 0)
     {
@@ -178,33 +176,24 @@ int main(int argc, char** argv)
 {
     queue<int> search;
     int pnumber;
-    double dl;
-    double du;
-    // 0.004 61009 0.011 0.015
     
     FILE* pointreader = fopen("test.xyz", "r");
     FILE* targetwriter = fopen("target.xyz", "w");
     unordered_map<int, double> dist;
     sscanf(argv[1], "%lf", &cell);
     sscanf(argv[2], "%d", &pnumber);
-//    // dl and du (floats)
-    sscanf(argv[3], "%lf", &dl);
-    sscanf(argv[4], "%lf", &du);
+    
     boxsize = (round)(1 / cell);
-    printf("BEFORE: pnumber: %d\n", pnumber);
+//    printf("before");
     for (int i = 0; i < pnumber; i++)
     {
         fscanf(pointreader, "%lf %lf %lf", &po[i].xyz[0], &po[i].xyz[1], &po[i].xyz[2]);
         int ppp = floor(((po[i].xyz[0] + 0.5) / cell)) * boxsize * boxsize + floor(((po[i].xyz[1] + 0.5) / cell)) * boxsize + floor(((po[i].xyz[2] + 0.5) / cell));
         search.push(ppp);
-//        printf("pushed");
     }
-    printf("AFTER");
+//    printf("after");
     kd.build(0, pnumber);
     int count = 0;
-    // print for debug
-    printf("boxsize: %d\n", boxsize);
-//    cout << "cell: " << cell << endl;
     while (!search.empty())
     {
         count++;
@@ -224,15 +213,14 @@ int main(int argc, char** argv)
         center.xyz[0] = x * cell + 0.5 * cell - 0.5;
         center.xyz[1] = y * cell + 0.5 * cell - 0.5;
         center.xyz[2] = z * cell + 0.5 * cell - 0.5;
-        int QueryNumber = 10;
-        kd.query(center, QueryNumber);
-        Vector3 pt[QueryNumber];
+        kd.query(center, 10);
+        Vector3 pt[10];
         for (int j = 0; !nq.empty(); j++)
             pt[j] = nq.top().second, nq.pop();
         double  tdist = 99999999999999;
-        for (int i = 0; i < (QueryNumber - 2); i++)
+        for (int i = 0; i < 8; i++)
         {
-            Vector3 tt = PointTri(pt[i], pt[QueryNumber - 2], pt[QueryNumber - 1], center);
+            Vector3 tt = PointTri(pt[i], pt[8], pt[9], center);
             double tmepdist = Dist(tt, center);
             if (tmepdist < tdist)
                 tdist = tmepdist;
@@ -240,11 +228,11 @@ int main(int argc, char** argv)
         if (dist.find(tpp) == dist.end())
         {
             dist[tpp] = tdist;
-            if (tdist >= dl && tdist <= du)
+            if (tdist >= 0.0110 && tdist <= 0.0150)
             {
                 fprintf(targetwriter, "%lf %lf %lf\n", center.xyz[0], center.xyz[1], center.xyz[2]);
             }
-            else if (tdist > du)
+            else if (tdist > 0.0150)
                 continue;
             for (int i = 0; i < 6; i++)
             {

@@ -36,8 +36,72 @@ def farthest_point_sample(xyz, pointnumber):
     return centroids.detach().cpu().numpy().astype(int)
 
 
+def subdivide_and_upsample(cloud):
+    """
+    The generator can only handle 5000 points at a time.
+    So we need to subdivide the pointcloud into smaller cubic chunks (8 subclouds)
+    and then upsample each subcloud, re-assemble them.
+    :param cloud:
+    :return:
+    """
+    if cloud.shape[0] < 100:  # k is from tree1.query(p_split[i], 100) in generateiopoint
+        return cloud
+    bbox = np.zeros((2, 3))
+    bbox[0][0] = np.min(cloud[:, 0])
+    bbox[0][1] = np.min(cloud[:, 1])
+    bbox[0][2] = np.min(cloud[:, 2])
+    bbox[1][0] = np.max(cloud[:, 0])
+    bbox[1][1] = np.max(cloud[:, 1])
+    bbox[1][2] = np.max(cloud[:, 2])
+    loc = (bbox[0] + bbox[1]) / 2
+    scale = (bbox[1] - bbox[0]).max()
+    scale1 = 1 / scale
+    # if the number of points is less than 5000 (max KDtree size), upsample it directly
+    # Greater performance is found via recursive subdivision than trying to
+    # significantly increase KDtree size (to 131072 or higher)
+    if cloud.size <= 5000:
+        for x in range(cloud.shape[0]):
+            cloud[x] = cloud[x] - loc
+            cloud[x] = cloud[x] * scale1
+        np.savetxt("test.xyz", cloud)
+        cloud = np.expand_dims(cloud, 0)
+
+        # upsampling
+        pointcloud = np.array(generator.upsample(cloud))
+
+        # farthest_point_sample
+        print("farthest point sample")
+        for x in range(pointcloud.shape[0]):
+            pointcloud[x] = pointcloud[x] * scale
+            pointcloud[x] = pointcloud[x] + loc
+
+        pointnumber = UPSAMPLE_AMOUNT * pointcloud.shape[0]
+
+        centroids = farthest_point_sample(pointcloud, pointnumber)
+        return pointcloud[centroids]
+    else:
+        # recursively subdivide the pointcloud into 8 subclouds
+        subclouds = []
+        for x in range(2):
+            for y in range(2):
+                for z in range(2):
+                    subcloud = cloud[np.where((cloud[:, 0] >= bbox[0][0] + x * scale / 2) &
+                                              (cloud[:, 0] < bbox[0][0] + (x + 1) * scale / 2) &
+                                              (cloud[:, 1] >= bbox[0][1] + y * scale / 2) &
+                                              (cloud[:, 1] < bbox[0][1] + (y + 1) * scale / 2) &
+                                              (cloud[:, 2] >= bbox[0][2] + z * scale / 2) &
+                                              (cloud[:, 2] < bbox[0][2] + (z + 1) * scale / 2))]
+                    subclouds.append(subcloud)
+        subclouds = np.array(subclouds, dtype=object)
+        pointcloud = []
+        for x in range(8):
+            pointcloud.append(subdivide_and_upsample(subclouds[x]))
+        pointcloud = np.concatenate(pointcloud, axis=0)
+        return pointcloud
+
+
 tpointnumber = 8192
-UPSAMPLE_AMOUNT = 8
+UPSAMPLE_AMOUNT = 2
 
 datalist = []
 outlist = []
@@ -50,6 +114,9 @@ for root, dirs, files in os.walk("buildings_split"):
             datalist.append(os.path.join(root, file))
             outlist.append(os.path.join(out_dir, file))
 
+# sort by file size (ensure datalist and outlist are in the same order)
+# this will assist with faster debugging
+datalist, outlist = zip(*sorted(zip(datalist, outlist), key=lambda x: os.path.getsize(x[0])))
 # print the boundaries of the pointclouds
 # for i in range(len(datalist)):
 #     print(datalist[i])
@@ -131,33 +198,10 @@ for k in range(len(datalist)):
     xyzname = datalist[k]
     cloud = np.loadtxt(xyzname)
     cloud = cloud[:, 0:3]
-    bbox = np.zeros((2, 3))
-    bbox[0][0] = np.min(cloud[:, 0])
-    bbox[0][1] = np.min(cloud[:, 1])
-    bbox[0][2] = np.min(cloud[:, 2])
-    bbox[1][0] = np.max(cloud[:, 0])
-    bbox[1][1] = np.max(cloud[:, 1])
-    bbox[1][2] = np.max(cloud[:, 2])
-    loc = (bbox[0] + bbox[1]) / 2
-    scale = (bbox[1] - bbox[0]).max()
-    scale1 = 1 / scale
-    for i in range(cloud.shape[0]):
-        cloud[i] = cloud[i] - loc
-        cloud[i] = cloud[i] * scale1
-    np.savetxt("test.xyz", cloud)
-    cloud = np.expand_dims(cloud, 0)
 
-    # upsampling
-    pointcloud = np.array(generator.upsample(cloud))
+    # subdivide and upsample
+    pointcloud = subdivide_and_upsample(cloud)
 
-    # farthest_point_sample
-    print("farthest point sample")
-    for i in range(pointcloud.shape[0]):
-        pointcloud[i] = pointcloud[i] * scale
-        pointcloud[i] = pointcloud[i] + loc
-
-    pointnumber = UPSAMPLE_AMOUNT * pointcloud.shape[0]
-
-    centroids = farthest_point_sample(pointcloud, pointnumber)
-    np.savetxt(outlist[k], pointcloud[centroids])
+    np.savetxt(outlist[k], pointcloud)
     print("done")
+
