@@ -42,7 +42,6 @@ def square_distance(src, dst):
     dist += torch.sum(dst ** 2, -1).view(B, 1, M)
     return dist
 
-
 def index_points(points, idx):
     """
 
@@ -59,26 +58,24 @@ def index_points(points, idx):
     repeat_shape = list(idx.shape)
     repeat_shape[0] = 1
     batch_indices = torch.arange(B, dtype=torch.long).to(device).view(view_shape).repeat(repeat_shape)
-    # TODO range clamp
-    # TODO check for nans
-    # TODO run on cpu
 
     # check for nans
-    nan_indices = torch.isnan(idx)
-    idx[nan_indices] = 0
+    # nan_indices = torch.isnan(idx)
+    # idx[nan_indices] = 0
 
     # clamp
-    idx = torch.clamp(idx, min=0, max=points.shape[1] - 1)
+    # idx = torch.clamp(idx, min=0, max=points.shape[1] - 1)
 
     try:
-        new_points = points[batch_indices, idx, :]  # erorr here
+        return points[batch_indices, idx, :]  # erorr here
     except:
         print("Error: ", points.shape, batch_indices.shape, idx.shape)
         # print EVERYTHING
         print("Batch Indices: ", batch_indices)
         print("Indices: ", idx)
+        return points[batch_indices, idx, :]
     # print("On Success: ", points.shape, batch_indices.shape, idx.shape)
-    return new_points
+    # return new_points
 
 
 def farthest_point_sample(xyz, npoint):
@@ -102,6 +99,12 @@ def farthest_point_sample(xyz, npoint):
         mask = dist < distance
         distance[mask] = dist[mask]
         farthest = torch.max(distance, -1)[1]
+
+    # check for out of bounds without converting to numpy
+
+    if torch.max(centroids) >= xyz.shape[1]:
+        print("Error: ", torch.max(centroids).item(), xyz.shape[1])
+        raise Exception("Index out of bounds")
     return centroids
 
 
@@ -118,13 +121,31 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
     device = xyz.device
     B, N, C = xyz.shape
     _, S, _ = new_xyz.shape
-    group_idx = torch.arange(N, dtype=torch.long).to(device).view(1, 1, N).repeat([B, S, 1])
+    group_idx = torch.arange(N, dtype=torch.long).to(device).view(1, 1, N).repeat([B, S, 1])  # good
     sqrdists = square_distance(new_xyz, xyz)
     group_idx[sqrdists > radius ** 2] = N
+    # check if there are at least nsample points that are closer than radius
+    # if torch.min(torch.sum(group_idx < N, dim=-1)) < nsample:
+    #     print("Error: ", torch.min(torch.sum(group_idx < N, dim=-1)).item(), nsample)
+    #     raise Exception("Not enough neighbors to gather")
+
     group_idx = group_idx.sort(dim=-1)[0][:, :, :nsample]
-    group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
+    group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])  # not good
     mask = group_idx == N
     group_idx[mask] = group_first[mask]
+    if torch.max(group_idx) >= xyz.shape[1]:
+        print("Error: ", torch.max(group_idx).item(), xyz.shape[1])
+        print("Using KNN fallback")
+        # we use the square distance to find the nearest neighbors
+        sqrdists = square_distance(new_xyz, xyz)
+        group_idx = torch.argsort(sqrdists, dim=-1)[:, :, :nsample]
+        group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
+        mask = group_idx == N
+        group_idx[mask] = group_first[mask]
+        if torch.max(group_idx) >= xyz.shape[1]:
+            print("Error: ", torch.max(group_idx).item(), xyz.shape[1])
+            raise Exception("KNN Fallback failed")
+
     return group_idx
 
 
