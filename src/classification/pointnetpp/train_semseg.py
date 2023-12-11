@@ -25,24 +25,8 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 classes = [
-    "Unclassified",
-    "Ground",
-    "Low Vegetation",
-    "Medium Vegetation",
-    "High Vegetation",
+    "Non-Building",
     "Building",
-    "Low Point (Noise)",
-    "Reserved1",
-    "Water",
-    "Rail",
-    "Road Surface",
-    "Reserved2",
-    "Wire - Guard (Shield)",
-    "Wire - Conductor (Phase)",
-    "Transmission Tower",
-    "Wire-Structure Connector (Insulator)",
-    "Bridge Deck",
-    "High Noise"
 ]
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
@@ -66,14 +50,14 @@ def parse_args():
     parser.add_argument('--model', type=str, default='pointnet2_sem_seg',
                         help='model name [default: pointnet2_sem_seg]')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
-    parser.add_argument('--epoch', default=64, type=int, help='Epoch to run [default: 32]')
-    parser.add_argument('--learning_rate', default=0.0002, type=float, help='Initial learning rate [default: 0.002]')
+    parser.add_argument('--epoch', default=32, type=int, help='Epoch to run [default: 32]')
+    parser.add_argument('--learning_rate', default=1e-4, type=float, help='Initial learning rate [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use [default: GPU 0]')
-    parser.add_argument('--optimizer', type=str, default='SGD', help='Adam or SGD [default: Adam]')
+    parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD [default: Adam]')
     parser.add_argument('--log_dir', type=str, default=None, help='Log path [default: None]')
-    parser.add_argument('--decay_rate', type=float, default=1e-3, help='weight decay [default: 1e-4]')
-    parser.add_argument('--npoint', type=int, default=2048, help='Point Number [default: 4096]')
-    parser.add_argument('--step_size', type=int, default=5, help='Decay step for lr decay [default: every 5 epochs]')
+    parser.add_argument('--decay_rate', type=float, default=1e-4, help='weight decay [default: 1e-4]')
+    parser.add_argument('--npoint', type=int, default=32768, help='Point Number [default: 4096]')
+    parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
 
     return parser.parse_args()
@@ -86,10 +70,12 @@ def main(args):
 
     '''HYPER PARAMETER'''
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    # run it on CPU
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     '''CREATE DIR'''
-    timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H'))  # TODO put the minutes back in
-    # timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
+    # timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H'))  # TODO put the minutes back in
+    timestr = str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M'))
     experiment_dir = Path('log/')
     experiment_dir.mkdir(exist_ok=True)
     experiment_dir = experiment_dir.joinpath('sem_seg')
@@ -116,14 +102,14 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    NUM_CLASSES = 18
+    NUM_CLASSES = 2  # changed from 18 due to binary classification
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = AerialLiDARDatasetWholeScene(split='train', process_data=False)
+    TRAIN_DATASET = AerialLiDARDatasetWholeScene(split='train', process_data=False, num_point=NUM_POINT)
     print("start loading test data ...")
-    TEST_DATASET = AerialLiDARDatasetWholeScene(split='test')
+    TEST_DATASET = AerialLiDARDatasetWholeScene(split='test', process_data=False, num_point=NUM_POINT)
 
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=8,
                                                   pin_memory=True, drop_last=True,
@@ -147,10 +133,12 @@ def main(args):
     def weights_init(m):
         classname = m.__class__.__name__
         if classname.find('Conv2d') != -1:
-            torch.nn.init.xavier_normal_(m.weight.data)
+            torch.nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        #     torch.nn.init.xavier_normal_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0.0)
         elif classname.find('Linear') != -1:
-            torch.nn.init.xavier_normal_(m.weight.data)
+            torch.nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        #     torch.nn.init.xavier_normal_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0.0)
 
     try:
@@ -210,7 +198,8 @@ def main(args):
             points = points.data.numpy()
             points[:, :, :3] = provider.rotate_point_cloud_z(points[:, :, :3])
             points = torch.Tensor(points)
-            points, target = points.float().cuda(), target.long().cuda()
+            points = points.float().cuda()
+            target = target.long().cuda()
             points = points.transpose(2, 1)
 
             seg_pred, trans_feat = classifier(points)
@@ -244,7 +233,7 @@ def main(args):
             log_string('Saving model....')
 
         '''Evaluate on chopped scenes'''
-        with torch.no_grad():  # TODO I don't think my data will work here yet
+        with torch.no_grad():
             num_batches = len(testDataLoader)
             total_correct = 0
             total_seen = 0
@@ -259,7 +248,8 @@ def main(args):
             for i, (points, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                 points = points.data.numpy()
                 points = torch.Tensor(points)
-                points, target = points.float().cuda(), target.long().cuda()
+                points = points.float().cuda()
+                target = target.long().cuda()
                 points = points.transpose(2, 1)
 
                 seg_pred, trans_feat = classifier(points)
