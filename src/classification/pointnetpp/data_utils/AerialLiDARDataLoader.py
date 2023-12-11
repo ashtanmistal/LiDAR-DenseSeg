@@ -10,35 +10,6 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
-def farthest_point_sample(point, npoint):
-    """
-    Input:
-        xyz: pointcloud data, [N, D]
-        npoint: number of samples
-    Return:
-        centroids: sampled pointcloud index, [npoint, D]
-    """
-    N, D = point.shape
-    xyz = point[:, :3]
-    centroids = np.zeros((npoint,))
-    distance = np.ones((N,)) * 1e10
-    farthest = np.random.randint(0, N)
-    for i in range(npoint):
-        centroids[i] = farthest
-        centroid = xyz[farthest, :]
-        dist = np.sum((xyz - centroid) ** 2, -1)
-        mask = dist < distance
-        distance[mask] = dist[mask]
-        farthest = np.argmax(distance, -1)
-    point = point[centroids.astype(np.int32)]
-    return point, centroids.astype(np.int32)
-
-
-def is_within_multipolygon(point, multipolygon):
-    """Check if a point is within any of the polygons in a MultiPolygon."""
-    return any([point.within(polygon) for polygon in multipolygon])
-
-
 def filter_points_in_polygon(points_with_index, geometry):
     """
     Filter points that are within a polygon.
@@ -49,9 +20,6 @@ def filter_points_in_polygon(points_with_index, geometry):
     :return: the filtered points
     """
 
-    # if isinstance(geometry, MultiPolygon):
-    #     filtered = [(i, p) for i, p in points_with_index if is_within_multipolygon(Point(p[:2]), geometry)]
-    # else:
     filtered = [(i, p) for i, p in points_with_index if Point(p[:2]).within(geometry)]
 
     # Separating indices and points for return
@@ -60,7 +28,6 @@ def filter_points_in_polygon(points_with_index, geometry):
 
 
 def calculate_label_weights(labels, num_classes):
-    # TODO this is broken - it looks to be one off from the actual number
     class_counts = np.bincount(labels.astype(np.int32), minlength=num_classes)
     class_weights = np.zeros(num_classes)
     for i in range(num_classes):
@@ -68,9 +35,13 @@ def calculate_label_weights(labels, num_classes):
             class_weights[i] = 0
         else:
             class_weights[i] = 1 / class_counts[i]
-    class_weights[9] = 0  # ignore the water class
     class_weights = class_weights / np.sum(class_weights)
+    class_weights = np.power(np.amax(class_weights) / class_weights, 1 / 3.0)  # What this does is it makes the weights
+    # for the classes that are underrepresented larger, and the weights for the classes that are overrepresented
+    # smaller. This is because we want to make sure that the loss function is not dominated by the overrepresented
+    # classes.
     return class_weights
+    # return np.array([1.0, 1.0])
 
 
 class AerialLiDARDatasetWholeScene(Dataset):
@@ -82,14 +53,15 @@ class AerialLiDARDatasetWholeScene(Dataset):
     https://github.com/yanx27/Pointnet_Pointnet2_pytorch/blob/master/data_utils/S3DISDataLoader.py
     """
 
-    NUM_CLASSES = 18
+    NUM_CLASSES = 2  # now it is 2 because of our binary classification
+    OFFSET_X = 480000
+    OFFSET_Y = 5455000
 
-    def __init__(self, split='train', file_path="data/data_label", data_root="data", num_point=2048, block_size=10.0,
+    def __init__(self, split='train', file_path="data/data_label", data_root="data", num_point=32768, block_size=64.0,
                  process_data=False):
-        # TODO figure out what to do for the split
         """
         Initialize the dataset with the path to the .las file
-        :param file_path: the path to the .las file
+        :param file_path:
         :param num_point:
         :param block_size:
         """
@@ -102,18 +74,20 @@ class AerialLiDARDatasetWholeScene(Dataset):
         sys.path.append(file_path)
         data_all = np.load(file_path)
         self.points, self.labels = data_all[:, :6], data_all[:, 6]  # xyzrgb, label
-        # rgb right now is between 0 and 65535, so we need to make it between 0 and 255
-        # make it a float first, then divide by 65535.0, then multiply by 255.0
+
+        self.labels[self.labels != 5] = 0
+        self.labels[self.labels == 5] = 1
         self.points[:, 3:6] = self.points[:, 3:6].astype(np.float32)
-        # self.points[:, 3:6] = self.points[:, 3:6] / 65535.0
         self.points[:, 3:6] = self.points[:, 3:6] * (255.0 / 65535.0)
-        # turn the rgb values into integers
         self.points[:, 3:6] = self.points[:, 3:6].astype(np.int32)
         if self.points.shape[0] < self.num_point:
             raise ValueError('Dataset size must be larger than num_point.')
-        self.labelweights = calculate_label_weights(self.labels, self.NUM_CLASSES)
 
         self.save_path = os.path.join(data_root, 'buildings_split')
+        buffered_geojson = os.path.join(data_root, 'buffer.geojson')
+        buildings = json.load(open(buffered_geojson))['features']
+        self.list_of_points = np.empty(len(buildings), dtype=object)
+        self.list_of_labels = np.empty(len(buildings), dtype=object)
         if self.process_data:
             """
             In order to process the data, we need to go through each building in the geojson, calculate the points 
@@ -122,31 +96,21 @@ class AerialLiDARDatasetWholeScene(Dataset):
             to access the data in the future in the __getitem__ function.
             """
             print('Processing data %s (only running in the first time)...' % self.save_path)
-            buffered_geojson = os.path.join(data_root, 'buffer.geojson')
-            buildings = json.load(open(buffered_geojson))['features']
-
-            self.list_of_points = [None] * len(buildings)
-            self.list_of_labels = [None] * len(buildings)
             for index in tqdm(range(len(buildings)), total=len(buildings)):
                 building = buildings[index]
                 building_uid = building['properties']['BLDG_UID']
                 building_polygon = shape(building['geometry'])
                 if building_polygon.geom_type == 'Polygon':
                     raise NotImplementedError('Polygon type not implemented yet; only MultiPolygon')
-                    # polygon is not implemented because we have buffered all the geometries
-                    # there does not exist a single Polygon in the geojson we are working with
                 elif building_polygon.geom_type == 'MultiPolygon':
-                    # get bounds of the building
                     bbox = building_polygon.bounds
                     points_array = np.array(self.points)
                     mask = (points_array[:, 0] >= bbox[0]) & (points_array[:, 0] <= bbox[2]) & \
                            (points_array[:, 1] >= bbox[1]) & (points_array[:, 1] <= bbox[3])
                     filtered_points = points_array[mask]
                     points_with_index = list(enumerate(filtered_points))
-                    # filter points within the building
                     points_within_building, within_building = filter_points_in_polygon(points_with_index,
                                                                                        building_polygon)
-                    # save the points to a file
                     building_file = os.path.join(self.save_path, building_uid + "_points.npy")
                     os.makedirs(os.path.dirname(building_file), exist_ok=True)
                     np.save(building_file, points_within_building)
@@ -160,10 +124,6 @@ class AerialLiDARDatasetWholeScene(Dataset):
                     raise NotImplementedError('Geometry type not implemented yet')
         else:
             print('Load processed data from %s...' % self.save_path)
-            buildings = json.load(open(os.path.join(data_root, 'buffer.geojson')))
-            buildings = buildings['features']
-            self.list_of_points = [None] * len(buildings)
-            self.list_of_labels = [None] * len(buildings)
             for index in tqdm(range(len(buildings)), total=len(buildings)):
                 building = buildings[index]
                 building_uid = building['properties']['BLDG_UID']
@@ -172,28 +132,48 @@ class AerialLiDARDatasetWholeScene(Dataset):
                 self.list_of_points[index] = np.load(building_file)
                 self.list_of_labels[index] = np.load(building_labels_file)
 
+        # train/test split
+        SPLIT_RATIO = 0.8
+        # create random booleans the length of the number of buildings, such that SPLIT_RATIO of them are True
+        train_mask = np.random.rand(len(buildings)) < SPLIT_RATIO
+        test_mask = np.logical_not(train_mask)
+        if split == 'train':
+            self.list_of_points = self.list_of_points[train_mask]
+            self.list_of_labels = self.list_of_labels[train_mask]
+        elif split == 'test':
+            self.list_of_points = self.list_of_points[test_mask]
+            self.list_of_labels = self.list_of_labels[test_mask]
+
+        # calculate label weights
+        labelweights = np.zeros(self.NUM_CLASSES)
+
+        num_point_all = []
+
+        for index in tqdm(range(len(self.list_of_labels)), total=len(self.list_of_labels)):
+            points, labels = self.list_of_points[index], self.list_of_labels[index]
+            tmp, _ = np.histogram(labels, range(self.NUM_CLASSES + 1))
+            labelweights += tmp
+            num_point_all.append(labels.shape[0])
+        labelweights = labelweights.astype(np.float32)
+        labelweights = labelweights / np.sum(labelweights)
+        self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
+        print(self.labelweights)
+
     def __len__(self):
         return len(self.list_of_points)
 
     def __getitem__(self, idx):
-        # TODO: We need to do the following:
-        # - Train / test split
-        # - Separate the dataset into each building (this will also assist with the train / test split!!)
-        # - This requires dataset preprocessing similar to ModelNetDataLoader.py
-        # - Then on the __getitem__ function,
-        #   - we query the idx of the building, and *then* we can do the farthest point stuff
-
         points, labels = self.list_of_points[idx], self.list_of_labels[idx]
         N_points = points.shape[0]
 
-        while (True):
+        while True:
             center = points[np.random.choice(N_points)][:3]
             block_min = center - [self.block_size / 2.0, self.block_size / 2.0, 0]
             block_max = center + [self.block_size / 2.0, self.block_size / 2.0, 0]
             point_idxs = np.where(
                 (points[:, 0] >= block_min[0]) & (points[:, 0] <= block_max[0]) & (points[:, 1] >= block_min[1]) & (
-                            points[:, 1] <= block_max[1]))[0]
-            if point_idxs.size > self.num_point // 2:
+                        points[:, 1] <= block_max[1]))[0]
+            if (point_idxs.size > self.num_point // 4) or (point_idxs.size == N_points):
                 break
 
         if point_idxs.size >= self.num_point:
@@ -204,8 +184,13 @@ class AerialLiDARDatasetWholeScene(Dataset):
         # code isn't really working, let's add some asserts to see what's going on
         assert selected_point_idxs.size == self.num_point
 
-        # normalize the points; TODO check if this is the right way to do it
         selected_points = points[selected_point_idxs, :]  # num_point * 6
+        # offset the x and y values
+        selected_points[:, 0] = selected_points[:, 0] - self.OFFSET_X
+        selected_points[:, 1] = selected_points[:, 1] - self.OFFSET_Y
+        # offset the center
+        center[0] = center[0] - self.OFFSET_X
+        center[1] = center[1] - self.OFFSET_Y
         current_points = np.zeros((self.num_point, 9))  # num_point * 9
         coord_max = np.max(selected_points[:, :3], axis=0)
         current_points[:, 6] = selected_points[:, 0] / coord_max[0]  # x
