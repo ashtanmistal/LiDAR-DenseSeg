@@ -1,16 +1,89 @@
+"""
+Author: Ashtan Mistal (derived from Charles R. Qi's implementation of PointNet++ in PyTorch)
+Date: Dec 2023
+"""
 import json
 import os
-import sys
 import numpy as np
-import random
-import time
+import pylas
 import torch
 from shapely.geometry import shape, Point
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
-def filter_points_in_polygon(points_with_index, geometry):
+def read_las_file(file_path):
+    """
+    Reads a .las file and extracts the necessary point cloud data.
+
+    :param file_path: Path to the .las file to be read.
+    :return: A tuple of numpy arrays (points, colors, labels).
+    """
+
+    # Open the .las file
+    las_data = pylas.read(file_path)
+
+    # Extract xyz coordinates
+    points = np.vstack((las_data.x, las_data.y, las_data.z)).transpose()
+
+    # Extract classification labels
+    labels = las_data.classification
+
+    # Check if color information is present and extract it
+    if hasattr(las_data, 'red') and hasattr(las_data, 'green') and hasattr(las_data, 'blue'):
+        colors = np.vstack((las_data.red, las_data.green, las_data.blue)).transpose()
+    else:
+        colors = np.zeros_like(points)  # If no color info, create a dummy array with zeros
+
+    # Normalize or preprocess the points if needed
+    # This would be based on the preprocessing done in the original S3DISDataLoader
+
+    # Return the extracted data
+    return points, colors, labels
+
+
+def write_ply(filename, data, create=True):
+    if create:
+        # if the directory doesn't exist, create it
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(filename, 'w') as f:
+        f.write("ply\n")
+        f.write("format ascii 1.0\n")
+        f.write("element vertex {}\n".format(len(data)))
+        f.write("property float x\n")
+        f.write("property float y\n")
+        f.write("property float z\n")
+        f.write("property uchar red\n")
+        f.write("property uchar green\n")
+        f.write("property uchar blue\n")
+        f.write("end_header\n")
+        for row in data:
+            f.write("{} {} {} {} {} {}\n".format(row[0], row[1], row[2], int(row[3]), int(row[4]), int(row[5])))
+
+
+def debug_to_ply(data_path, xyz, rgb):
+    filename = os.path.join(data_path, 'debug.ply')
+    data = np.concatenate((xyz, rgb), axis=1)
+    write_ply(filename, data)
+
+
+def read_ply(filename):
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    # Extracting the number of vertices from the header
+    num_vertices = int(next(line for line in lines if line.startswith("element vertex")).split()[-1])
+
+    # Find the start of the vertex data
+    start_idx = lines.index("end_header\n") + 1
+
+    # Read and convert the vertex data
+    data = np.array([list(map(float, line.split())) for line in tqdm(lines[start_idx:start_idx + num_vertices])])
+
+    return data
+
+
+def filter_points_in_multipolygon(points_with_index, geometry):
     """
     Filter points that are within a polygon.
     Usage: points = filter_points_in_polygon(points, polygon)
@@ -27,24 +100,7 @@ def filter_points_in_polygon(points_with_index, geometry):
     return list(within_geometry), list(indices)
 
 
-def calculate_label_weights(labels, num_classes):
-    class_counts = np.bincount(labels.astype(np.int32), minlength=num_classes)
-    class_weights = np.zeros(num_classes)
-    for i in range(num_classes):
-        if class_counts[i] == 0:
-            class_weights[i] = 0
-        else:
-            class_weights[i] = 1 / class_counts[i]
-    class_weights = class_weights / np.sum(class_weights)
-    class_weights = np.power(np.amax(class_weights) / class_weights, 1 / 3.0)  # What this does is it makes the weights
-    # for the classes that are underrepresented larger, and the weights for the classes that are overrepresented
-    # smaller. This is because we want to make sure that the loss function is not dominated by the overrepresented
-    # classes.
-    return class_weights
-    # return np.array([1.0, 1.0])
-
-
-class AerialLiDARDatasetWholeScene(Dataset):
+class UBCDataset(Dataset):
     """
     Loader for whole scene data from las files.
     Code attribution: This code is significantly based on the PyTorch
@@ -53,73 +109,106 @@ class AerialLiDARDatasetWholeScene(Dataset):
     https://github.com/yanx27/Pointnet_Pointnet2_pytorch/blob/master/data_utils/S3DISDataLoader.py
     """
 
+    DEBUG_MODE = False  # set to True to debug
     NUM_CLASSES = 2  # now it is 2 because of our binary classification
+    CLASS_OF_INTEREST = 6
     OFFSET_X = 480000
     OFFSET_Y = 5455000
+    ROTATION_DEGREES = 28.000  # This is the rotation of UBC's roads relative to true north.
+    ROTATION_RADIANS = np.radians(ROTATION_DEGREES)
+    INVERSE_ROTATION_MATRIX = np.array([[np.cos(ROTATION_RADIANS), np.sin(ROTATION_RADIANS), 0],
+                                        [-np.sin(ROTATION_RADIANS), np.cos(ROTATION_RADIANS), 0],
+                                        [0, 0, 1]])
 
-    def __init__(self, split='train', file_path="data/data_label", data_root="data", num_point=32768, block_size=64.0,
+    def __init__(self, split='train', data_path="data/las", data_root="data", num_point=32768, block_size=32.0,
                  process_data=False):
         """
         Initialize the dataset with the path to the .las file
-        :param file_path:
-        :param num_point:
-        :param block_size:
+        :param split: 'train' or 'test'
+        :param data_path: path to the .las folder
+        :param data_root: path to the root of the data
+        :param num_point: number of points to sample
+        :param block_size: size of the block to sample
+        :param process_data: whether to process the data or not
         """
         super().__init__()
         self.num_point = num_point
         self.block_size = block_size
         self.process_data = process_data
-        file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        file_path = os.path.join(file_path, 'data', 'data_label', 'classified_merged_points.npy')
-        sys.path.append(file_path)
-        data_all = np.load(file_path)
-        self.points, self.labels = data_all[:, :6], data_all[:, 6]  # xyzrgb, label
-
-        self.labels[self.labels != 5] = 0
-        self.labels[self.labels == 5] = 1
-        self.points[:, 3:6] = self.points[:, 3:6].astype(np.float32)
-        self.points[:, 3:6] = self.points[:, 3:6] * (255.0 / 65535.0)
-        self.points[:, 3:6] = self.points[:, 3:6].astype(np.int32)
-        if self.points.shape[0] < self.num_point:
-            raise ValueError('Dataset size must be larger than num_point.')
 
         self.save_path = os.path.join(data_root, 'buildings_split')
         buffered_geojson = os.path.join(data_root, 'buffer.geojson')
+        # buffered_geojson = os.path.join(data_root, 'singlebuilding.geojson')  # overfitting to a single building
         buildings = json.load(open(buffered_geojson))['features']
+        # remove any buildings with a height less than 2
+        buildings = [building for building in buildings if (building['properties']['BLDG_HEIGHT'] is not None) and
+                     (building['properties']['BLDG_HEIGHT'] >= 3)]
+        # take only the first 10 buildings for debugging
+        # buildings = buildings[:1]
         self.list_of_points = np.empty(len(buildings), dtype=object)
         self.list_of_labels = np.empty(len(buildings), dtype=object)
+        self.list_of_building_uids = []
         if self.process_data:
             """
             In order to process the data, we need to go through each building in the geojson, calculate the points 
             that intersect with the building, and then save those points to a file
-            corresponding to the building. We will also create `self.list_of_points` and `self.list_of_labels` to be able
-            to access the data in the future in the __getitem__ function.
+            corresponding to the building. We will also create `self.list_of_points` and `self.list_of_labels` to be
+            able to access the data in the future in the __getitem__ function.
             """
             print('Processing data %s (only running in the first time)...' % self.save_path)
+            points_data = []
+            colors_data = []
+            label_data = []
+            print("las processing...")
+            for filename in tqdm(os.listdir(data_path)):
+                if filename.endswith(".las"):
+                    xyz, rgb, l = read_las_file(os.path.join(data_path, filename))
+                    # remove never classified, unclassified, and noise (0, 1, 7)
+                    valid_indices = np.where((l != 0) & (l != 1) & (l != 7))
+                    xyz, rgb, l = xyz[valid_indices], rgb[valid_indices], l[valid_indices]
+                    rgb = rgb * (255.0 / 65535.0)
+                    l = (l == self.CLASS_OF_INTEREST).astype(int)  # make the labels binary
+                    points_data.append(xyz)
+                    colors_data.append(rgb)
+                    label_data.append(l)
+
+            # flatten the arrays to make them 2D
+            ply_data = np.concatenate(points_data, axis=0)
+            ply_data = np.concatenate((ply_data, np.concatenate(colors_data, axis=0)), axis=1)
+            label_data = np.concatenate(label_data, axis=0)
+            print("building processing...")
             for index in tqdm(range(len(buildings)), total=len(buildings)):
                 building = buildings[index]
                 building_uid = building['properties']['BLDG_UID']
                 building_polygon = shape(building['geometry'])
-                if building_polygon.geom_type == 'Polygon':
-                    raise NotImplementedError('Polygon type not implemented yet; only MultiPolygon')
-                elif building_polygon.geom_type == 'MultiPolygon':
+                if building_polygon.geom_type == 'MultiPolygon':
                     bbox = building_polygon.bounds
-                    points_array = np.array(self.points)
-                    mask = (points_array[:, 0] >= bbox[0]) & (points_array[:, 0] <= bbox[2]) & \
-                           (points_array[:, 1] >= bbox[1]) & (points_array[:, 1] <= bbox[3])
-                    filtered_points = points_array[mask]
-                    points_with_index = list(enumerate(filtered_points))
-                    points_within_building, within_building = filter_points_in_polygon(points_with_index,
-                                                                                       building_polygon)
+                    mask = (ply_data[:, 0] >= bbox[0]) & (ply_data[:, 0] <= bbox[2]) & \
+                           (ply_data[:, 1] >= bbox[1]) & (ply_data[:, 1] <= bbox[3])
+                    masked_labels = label_data[mask]
+                    points_with_index = list(enumerate(ply_data[mask]))
+                    points_in_bldg, idx_within_building = filter_points_in_multipolygon(points_with_index,
+                                                                                        building_polygon)
+                    # subtract offsets from x and y
+                    points_in_bldg = np.array(points_in_bldg)
+                    tmp = np.matmul(self.INVERSE_ROTATION_MATRIX,
+                                    np.array([points_in_bldg[:, 0] - self.OFFSET_X,
+                                              points_in_bldg[:, 1] - self.OFFSET_Y,
+                                              points_in_bldg[:, 2]]))
+                    points_in_bldg[:, 0], points_in_bldg[:, 1], points_in_bldg[:, 2] = tmp[0], tmp[1], tmp[2]
+                    # building_file = os.path.join(self.save_path, building_uid + "_points.ply")
+                    # os.makedirs(os.path.dirname(building_file), exist_ok=True)
+                    # write_ply(building_file, points_in_bldg)  # more useful than .npy for visualizing
                     building_file = os.path.join(self.save_path, building_uid + "_points.npy")
-                    os.makedirs(os.path.dirname(building_file), exist_ok=True)
-                    np.save(building_file, points_within_building)
-                    building_labels = self.labels[within_building]
-                    building_labels_file = os.path.join(self.save_path, building_uid + "_labels.npy")
-                    np.save(building_labels_file, building_labels)
+                    np.save(building_file, points_in_bldg)
+                    building_labels = masked_labels[idx_within_building]
+                    building_labels_file = os.path.join(self.save_path, building_uid + "_labels.txt")
+                    os.makedirs(os.path.dirname(building_labels_file), exist_ok=True)
+                    np.savetxt(building_labels_file, building_labels, fmt="%d")
                     # save the points and labels to the list of points and labels
-                    self.list_of_points[index] = points_within_building
+                    self.list_of_points[index] = points_in_bldg
                     self.list_of_labels[index] = building_labels
+                    self.list_of_building_uids.append(building_uid)
                 else:
                     raise NotImplementedError('Geometry type not implemented yet')
         else:
@@ -127,16 +216,26 @@ class AerialLiDARDatasetWholeScene(Dataset):
             for index in tqdm(range(len(buildings)), total=len(buildings)):
                 building = buildings[index]
                 building_uid = building['properties']['BLDG_UID']
+                # building_file = os.path.join(self.save_path, building_uid + "_points.ply")
+                # self.list_of_points[index] = read_ply(building_file)
+                # using .npy instead
                 building_file = os.path.join(self.save_path, building_uid + "_points.npy")
-                building_labels_file = os.path.join(self.save_path, building_uid + "_labels.npy")
                 self.list_of_points[index] = np.load(building_file)
-                self.list_of_labels[index] = np.load(building_labels_file)
+                building_labels_file = os.path.join(self.save_path, building_uid + "_labels.txt")
+                self.list_of_labels[index] = np.loadtxt(building_labels_file)
 
         # train/test split
-        SPLIT_RATIO = 0.8
-        # create random booleans the length of the number of buildings, such that SPLIT_RATIO of them are True
-        train_mask = np.random.rand(len(buildings)) < SPLIT_RATIO
-        test_mask = np.logical_not(train_mask)
+        if len(buildings) == 1:
+            # This is done when we are overfitting to a single building
+            split_ratio = 1.0
+            train_mask = np.random.rand(len(buildings)) < split_ratio
+            test_mask = train_mask
+        else:
+            # real train/test split
+            split_ratio = 0.7
+            train_mask = np.random.rand(len(buildings)) < split_ratio
+            # train_mask = torch.rand(len(buildings)) < split_ratio
+            test_mask = np.logical_not(train_mask)
         if split == 'train':
             self.list_of_points = self.list_of_points[train_mask]
             self.list_of_labels = self.list_of_labels[train_mask]
@@ -146,7 +245,6 @@ class AerialLiDARDatasetWholeScene(Dataset):
 
         # calculate label weights
         labelweights = np.zeros(self.NUM_CLASSES)
-
         num_point_all = []
 
         for index in tqdm(range(len(self.list_of_labels)), total=len(self.list_of_labels)):
@@ -157,88 +255,72 @@ class AerialLiDARDatasetWholeScene(Dataset):
         labelweights = labelweights.astype(np.float32)
         labelweights = labelweights / np.sum(labelweights)
         self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
+        self.labelweights = self.labelweights / np.sum(self.labelweights)
         print(self.labelweights)
 
     def __len__(self):
         return len(self.list_of_points)
 
     def __getitem__(self, idx):
+        # idx = 0  # using this for debugging
         points, labels = self.list_of_points[idx], self.list_of_labels[idx]
-        N_points = points.shape[0]
+        labels = labels.astype(int)
+        n_points = points.shape[0]
 
         while True:
-            center = points[np.random.choice(N_points)][:3]
+            center = points[np.random.choice(n_points)][:3]
+            # just pick the center of the building for single batch
+            # center = np.mean(points[:, :3], axis=0)
             block_min = center - [self.block_size / 2.0, self.block_size / 2.0, 0]
             block_max = center + [self.block_size / 2.0, self.block_size / 2.0, 0]
             point_idxs = np.where(
                 (points[:, 0] >= block_min[0]) & (points[:, 0] <= block_max[0]) & (points[:, 1] >= block_min[1]) & (
                         points[:, 1] <= block_max[1]))[0]
-            if (point_idxs.size > self.num_point // 4) or (point_idxs.size == N_points):
+            if point_idxs.size > self.num_point // 2:
                 break
 
         if point_idxs.size >= self.num_point:
             selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=False)
+            # selected_point_idxs = torch.randperm(point_idxs.size)[:self.num_point]
+
         else:
             selected_point_idxs = np.random.choice(point_idxs, self.num_point, replace=True)
-
-        # code isn't really working, let's add some asserts to see what's going on
-        assert selected_point_idxs.size == self.num_point
+            # selected_point_idxs = torch.randint(0, point_idxs.size, (self.num_point,))
 
         selected_points = points[selected_point_idxs, :]  # num_point * 6
-        # offset the x and y values
-        selected_points[:, 0] = selected_points[:, 0] - self.OFFSET_X
-        selected_points[:, 1] = selected_points[:, 1] - self.OFFSET_Y
-        # offset the center
-        center[0] = center[0] - self.OFFSET_X
-        center[1] = center[1] - self.OFFSET_Y
+        min_z = np.min(selected_points[:, 2])
+
         current_points = np.zeros((self.num_point, 9))  # num_point * 9
+
+        selected_points[:, 0] = selected_points[:, 0] - center[0]  # x
+        selected_points[:, 1] = selected_points[:, 1] - center[1]  # y
+        selected_points[:, 2] = selected_points[:, 2] - min_z  # z
         coord_max = np.max(selected_points[:, :3], axis=0)
+
         current_points[:, 6] = selected_points[:, 0] / coord_max[0]  # x
         current_points[:, 7] = selected_points[:, 1] / coord_max[1]  # y
         current_points[:, 8] = selected_points[:, 2] / coord_max[2]  # z
-        selected_points[:, 0] = selected_points[:, 0] - center[0]  # x
-        selected_points[:, 1] = selected_points[:, 1] - center[1]  # y
-        selected_points[:, 3:6] /= 255.0
+        # ensure they are between -1 and 1
+        current_points[:, 6] = current_points[:, 6] * 2 - 1
+        current_points[:, 7] = current_points[:, 7] * 2 - 1
+        current_points[:, 8] = current_points[:, 8] * 2 - 1
         current_points[:, 0:6] = selected_points
         current_labels = labels[selected_point_idxs]  # num_point * 1
 
-        assert current_points.shape == (self.num_point, 9)
-        assert current_labels.shape == (self.num_point,)
+        # if self.DEBUG_MODE:
+        #     assert current_points.shape == (self.num_point, 9)
+        #     assert current_labels.shape == (self.num_point,)
+        #
+        #     # save to test.ply for debugging (keeping xyzrgb. write a header)
+        #     test_ply = os.path.join(self.save_path, 'test.ply')
+        #     write_ply(test_ply, current_points)
+        #
+        #     # write to a .ply all the points with 1 as a label
+        #     buildings_ply = os.path.join(self.save_path, 'buildings.ply')
+        #     building_idx = np.where(current_labels == 1)
+        #     building_points = current_points[building_idx]
+        #     write_ply(buildings_ply, building_points)
+
+        # current_labels = np.ones(self.num_point)
 
         return current_points, current_labels
-
-
-manual_seed = 123
-
-
-def worker_init_fn(worker_id):
-    random.seed(manual_seed + worker_id)
-
-
-if __name__ == '__main__':
-    # file_path = 'data/data_label/classified_merged_points.npy'
-    file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    file_path = os.path.join(file_path, 'data', 'data_label', 'classified_merged_points.npy')
-    sys.path.append(file_path)
-    # Initialize the dataset with the path to the file
-    aerial_data = AerialLiDARDatasetWholeScene(file_path=file_path)
-
-    print('Aerial LiDAR data size:', aerial_data.__len__())
-    print('Aerial LiDAR data 0 shape:', aerial_data.__getitem__(0)[0].shape)
-    print('Aerial LiDAR label 0 shape:', aerial_data.__getitem__(0)[1].shape)
-
-    random.seed(manual_seed)
-    np.random.seed(manual_seed)
-    torch.manual_seed(manual_seed)
-    torch.cuda.manual_seed_all(manual_seed)
-
-    # Create the DataLoader for the aerial LiDAR data
-    train_loader = torch.utils.data.DataLoader(aerial_data, batch_size=16, shuffle=True, num_workers=8, pin_memory=True,
-                                               worker_init_fn=worker_init_fn)
-
-    # Iterate through the DataLoader
-    for idx in range(4):
-        end = time.time()
-        for i, (input, target) in enumerate(train_loader):
-            print('time: {}/{}--{}'.format(i + 1, len(train_loader), time.time() - end))
-            end = time.time()
