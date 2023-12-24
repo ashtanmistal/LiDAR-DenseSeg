@@ -87,7 +87,7 @@ def main(args):
 
     root = 'data/'
 
-    TEST_DATASET_WHOLE_SCENE = UBCDatasetWholeScene(root, split='merged', block_points=NUM_POINT, preprocess=True)
+    TEST_DATASET_WHOLE_SCENE = UBCDatasetWholeScene(root, split='classified', block_points=NUM_POINT, preprocess=False)
     log_string("The number of test data is: %d" % len(TEST_DATASET_WHOLE_SCENE))
 
     '''MODEL LOADING'''
