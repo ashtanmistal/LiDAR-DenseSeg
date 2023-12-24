@@ -97,13 +97,31 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
     device = xyz.device
     B, N, C = xyz.shape
     _, S, _ = new_xyz.shape
-    group_idx = torch.arange(N, dtype=torch.long).to(device).view(1, 1, N).repeat([B, S, 1])
+    group_idx = torch.arange(N, dtype=torch.long).to(device).view(1, 1, N).repeat([B, S, 1])  # good
     sqrdists = square_distance(new_xyz, xyz)
     group_idx[sqrdists > radius ** 2] = N
+    # check if there are at least nsample points that are closer than radius
+    # if torch.min(torch.sum(group_idx < N, dim=-1)) < nsample:
+    #     print("Error: ", torch.min(torch.sum(group_idx < N, dim=-1)).item(), nsample)
+    #     raise Exception("Not enough neighbors to gather")
+
     group_idx = group_idx.sort(dim=-1)[0][:, :, :nsample]
-    group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
+    group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])  # not good
     mask = group_idx == N
     group_idx[mask] = group_first[mask]
+    if torch.max(group_idx) >= xyz.shape[1]:
+        print("Error: ", torch.max(group_idx).item(), xyz.shape[1])
+        print("Using KNN fallback")
+        # we use the square distance to find the nearest neighbors
+        sqrdists = square_distance(new_xyz, xyz)
+        group_idx = torch.argsort(sqrdists, dim=-1)[:, :, :nsample]
+        group_first = group_idx[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
+        mask = group_idx == N
+        group_idx[mask] = group_first[mask]
+        if torch.max(group_idx) >= xyz.shape[1]:
+            print("Error: ", torch.max(group_idx).item(), xyz.shape[1])
+            raise Exception("KNN Fallback failed")
+
     return group_idx
 
 
