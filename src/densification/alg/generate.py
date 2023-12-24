@@ -39,133 +39,93 @@ def farthest_point_sample(xyz, pointnumber):
 def subdivide_and_upsample(cloud):
     """
     The generator can only handle 5000 points at a time.
-    So we need to subdivide the pointcloud into smaller cubic chunks (8 subclouds)
+    So we need to subdivide the pointcloud into smaller blocks based on a median plane,
     and then upsample each subcloud, re-assemble them.
     :param cloud:
     :return:
     """
     if cloud.shape[0] < 100:  # k is from tree1.query(p_split[i], 100) in generateiopoint
         return cloud
-    bbox = np.zeros((2, 3))
-    bbox[0][0] = np.min(cloud[:, 0])
-    bbox[0][1] = np.min(cloud[:, 1])
-    bbox[0][2] = np.min(cloud[:, 2])
-    bbox[1][0] = np.max(cloud[:, 0])
-    bbox[1][1] = np.max(cloud[:, 1])
-    bbox[1][2] = np.max(cloud[:, 2])
-    loc = (bbox[0] + bbox[1]) / 2
-    scale = (bbox[1] - bbox[0]).max()
-    scale1 = 1 / scale
+
+    bbox = np.array([np.min(cloud, axis=0), np.max(cloud, axis=0)])
     # if the number of points is less than 5000 (max KDtree size), upsample it directly
     # Greater performance is found via recursive subdivision than trying to
     # significantly increase KDtree size (to 131072 or higher)
-    if cloud.size <= 5000:
+    if cloud.shape[0] < 5000:
+
+        loc = np.mean(bbox, axis=0)
+        scale = np.max(bbox[1] - bbox[0])
         for x in range(cloud.shape[0]):
             cloud[x] = cloud[x] - loc
-            cloud[x] = cloud[x] * scale1
+            cloud[x] = cloud[x] / scale
         np.savetxt("test.xyz", cloud)
-        cloud = np.expand_dims(cloud, 0)
+        cloud = np.expand_dims(cloud, 0)  # (5000, 3) -> (1, 5000, 3)
 
         # upsampling
         pointcloud = np.array(generator.upsample(cloud))
 
-        # farthest_point_sample
         print("farthest point sample")
+        # ndarray (1, 5000, 3)
+
+        pointnumber = UPSAMPLE_AMOUNT * cloud.shape[1]
+
+        centroids = farthest_point_sample(pointcloud, pointnumber)
+
+        # undo the scaling
         for x in range(pointcloud.shape[0]):
             pointcloud[x] = pointcloud[x] * scale
             pointcloud[x] = pointcloud[x] + loc
 
-        pointnumber = UPSAMPLE_AMOUNT * pointcloud.shape[0]
-
-        centroids = farthest_point_sample(pointcloud, pointnumber)
         return pointcloud[centroids]
     else:
-        # recursively subdivide the pointcloud into 8 subclouds
-        subclouds = []
-        for x in range(2):
-            for y in range(2):
-                for z in range(2):
-                    subcloud = cloud[np.where((cloud[:, 0] >= bbox[0][0] + x * scale / 2) &
-                                              (cloud[:, 0] < bbox[0][0] + (x + 1) * scale / 2) &
-                                              (cloud[:, 1] >= bbox[0][1] + y * scale / 2) &
-                                              (cloud[:, 1] < bbox[0][1] + (y + 1) * scale / 2) &
-                                              (cloud[:, 2] >= bbox[0][2] + z * scale / 2) &
-                                              (cloud[:, 2] < bbox[0][2] + (z + 1) * scale / 2))]
-                    subclouds.append(subcloud)
-        subclouds = np.array(subclouds, dtype=object)
-        pointcloud = []
-        for x in range(8):
-            pointcloud.append(subdivide_and_upsample(subclouds[x]))
-        pointcloud = np.concatenate(pointcloud, axis=0)
-        return pointcloud
+        # subdivide the pointcloud into 2 based on a median plane that splits x, y, or z in half based on
+        # the largest dimension
+        largest_dim = np.argmax(bbox[1] - bbox[0])
+        median = np.median(cloud[:, largest_dim])
+        pc1 = subdivide_and_upsample(cloud[cloud[:, largest_dim] < median])
+        pc2 = subdivide_and_upsample(cloud[cloud[:, largest_dim] >= median])
+        return np.concatenate((pc1, pc2), axis=0)
 
 
-tpointnumber = 8192
+def obj_to_xyz(obj_file):
+    # data is of the form:
+    # 1825.157331 -152.869169 67.399000 0 255 0
+    # Only keep the point if the color is red
+    xyz = []
+    for x in range(obj_file.shape[0]):
+        if obj_file[x][3] == 255 and obj_file[x][4] == 0 and obj_file[x][5] == 0:
+            xyz.append([obj_file[x][0], obj_file[x][1], obj_file[x][2]])
+    xyz = np.array(xyz, dtype=np.float32)
+    return xyz
+
+
+def xyz_to_obj(xyz):
+    # add the v and color to the xyz
+    obj = []
+    for x in range(xyz.shape[0]):
+        obj.append(['v', xyz[x][0], xyz[x][1], xyz[x][2], '255', '0', '0'])
+    obj = np.array(obj)
+    return obj
+
+
 UPSAMPLE_AMOUNT = 2
 
 datalist = []
 outlist = []
 
-out_dir = 'buildings_out'
+out_dir = 'data_out'
 
-for root, dirs, files in os.walk("buildings_split"):
+for root, dirs, files in os.walk("data_in"):
     for file in files:
-        if file.endswith(".xyz"):
+        if file.endswith("_pred.obj"):
             datalist.append(os.path.join(root, file))
             outlist.append(os.path.join(out_dir, file))
+
+
 
 # sort by file size (ensure datalist and outlist are in the same order)
 # this will assist with faster debugging
 datalist, outlist = zip(*sorted(zip(datalist, outlist), key=lambda x: os.path.getsize(x[0])))
-# print the boundaries of the pointclouds
-# for i in range(len(datalist)):
-#     print(datalist[i])
-#     cloud = np.loadtxt(datalist[i])
-#     cloud = cloud[:, 0:3]
-#     print("min: ", np.min(cloud[:, 0]), np.min(cloud[:, 1]), np.min(cloud[:, 2]))
-#     print("max: ", np.max(cloud[:, 0]), np.max(cloud[:, 1]), np.max(cloud[:, 2]))
-#     print()
-# datalist = ['test/cow.xyz',
-#             'test/coverrear_Lp.xyz',
-#             'test/chair.xyz',
-#             'test/camel.xyz',
-#             'test/casting.xyz',
-#             'test/duck.xyz',
-#             'test/eight.xyz',
-#             'test/elephant.xyz',
-#             'test/elk.xyz',
-#             'test/fandisk.xyz',
-#             'test/genus3.xyz',
-#             'test/horse.xyz',
-#             'test/Icosahedron.xyz',
-#             'test/kitten.xyz',
-#             'test/moai.xyz',
-#             'test/Octahedron.xyz',
-#             'test/pig.xyz',
-#             'test/quadric.xyz',
-#             'test/sculpt.xyz',
-#             'test/star.xyz']
-
-# outlist = ['testout/cow.xyz',
-#            'testout/coverrear_Lp.xyz',
-#            'testout/chair.xyz',
-#            'testout/camel.xyz',
-#            'testout/casting.xyz',
-#            'testout/duck.xyz',
-#            'testout/eight.xyz',
-#            'testout/elephant.xyz',
-#            'testout/elk.xyz',
-#            'testout/fandisk.xyz',
-#            'testout/genus3.xyz',
-#            'testout/horse.xyz',
-#            'testout/Icosahedron.xyz',
-#            'testout/kitten.xyz',
-#            'testout/moai.xyz',
-#            'testout/Octahedron.xyz',
-#            'testout/pig.xyz',
-#            'testout/quadric.xyz',
-#            'testout/sculpt.xyz',
-#            'testout/star.xyz']
 
 is_cuda = (torch.cuda.is_available())
 device = torch.device("cuda" if is_cuda else "cpu")
@@ -196,12 +156,15 @@ for k in range(len(datalist)):
     open("target.xyz", 'w').close()
     # normalization
     xyzname = datalist[k]
-    cloud = np.loadtxt(xyzname)
+    cloud = np.loadtxt(xyzname, usecols=(1, 2, 3, 4, 5, 6))
+    cloud = obj_to_xyz(cloud)
     cloud = cloud[:, 0:3]
 
     # subdivide and upsample
+    print("total points: " + str(cloud.shape[0]))
     pointcloud = subdivide_and_upsample(cloud)
 
-    np.savetxt(outlist[k], pointcloud)
+    # save pointcloud
+    pc_obj = xyz_to_obj(pointcloud)
+    np.savetxt(outlist[k], pc_obj, fmt='%s')
     print("done")
-

@@ -9,3 +9,4 @@
 /data/
 /src/densification/alg/data_in/
 /src/densification/alg/data_out/
+*__pycache__/
