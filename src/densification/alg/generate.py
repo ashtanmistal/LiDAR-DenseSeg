@@ -100,9 +100,7 @@ def subdivide_and_upsample(cloud):
         return pointcloud
 
 
-tpointnumber = 8192
 UPSAMPLE_AMOUNT = 2
-
 datalist = []
 outlist = []
 
@@ -114,58 +112,7 @@ for root, dirs, files in os.walk("buildings_split"):
             datalist.append(os.path.join(root, file))
             outlist.append(os.path.join(out_dir, file))
 
-# sort by file size (ensure datalist and outlist are in the same order)
-# this will assist with faster debugging
 datalist, outlist = zip(*sorted(zip(datalist, outlist), key=lambda x: os.path.getsize(x[0])))
-# print the boundaries of the pointclouds
-# for i in range(len(datalist)):
-#     print(datalist[i])
-#     cloud = np.loadtxt(datalist[i])
-#     cloud = cloud[:, 0:3]
-#     print("min: ", np.min(cloud[:, 0]), np.min(cloud[:, 1]), np.min(cloud[:, 2]))
-#     print("max: ", np.max(cloud[:, 0]), np.max(cloud[:, 1]), np.max(cloud[:, 2]))
-#     print()
-# datalist = ['test/cow.xyz',
-#             'test/coverrear_Lp.xyz',
-#             'test/chair.xyz',
-#             'test/camel.xyz',
-#             'test/casting.xyz',
-#             'test/duck.xyz',
-#             'test/eight.xyz',
-#             'test/elephant.xyz',
-#             'test/elk.xyz',
-#             'test/fandisk.xyz',
-#             'test/genus3.xyz',
-#             'test/horse.xyz',
-#             'test/Icosahedron.xyz',
-#             'test/kitten.xyz',
-#             'test/moai.xyz',
-#             'test/Octahedron.xyz',
-#             'test/pig.xyz',
-#             'test/quadric.xyz',
-#             'test/sculpt.xyz',
-#             'test/star.xyz']
-
-# outlist = ['testout/cow.xyz',
-#            'testout/coverrear_Lp.xyz',
-#            'testout/chair.xyz',
-#            'testout/camel.xyz',
-#            'testout/casting.xyz',
-#            'testout/duck.xyz',
-#            'testout/eight.xyz',
-#            'testout/elephant.xyz',
-#            'testout/elk.xyz',
-#            'testout/fandisk.xyz',
-#            'testout/genus3.xyz',
-#            'testout/horse.xyz',
-#            'testout/Icosahedron.xyz',
-#            'testout/kitten.xyz',
-#            'testout/moai.xyz',
-#            'testout/Octahedron.xyz',
-#            'testout/pig.xyz',
-#            'testout/quadric.xyz',
-#            'testout/sculpt.xyz',
-#            'testout/star.xyz']
 
 is_cuda = (torch.cuda.is_available())
 device = torch.device("cuda" if is_cuda else "cpu")
@@ -194,7 +141,6 @@ for k in range(len(datalist)):
     # clear test.xyz and target.xyz (make them empty)
     open("test.xyz", 'w').close()
     open("target.xyz", 'w').close()
-    # normalization
     xyzname = datalist[k]
     cloud = np.loadtxt(xyzname)
     cloud = cloud[:, 0:3]
@@ -204,4 +150,3 @@ for k in range(len(datalist)):
 
     np.savetxt(outlist[k], pointcloud)
     print("done")
-

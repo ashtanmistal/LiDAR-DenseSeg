@@ -324,3 +324,202 @@ class UBCDataset(Dataset):
         # current_labels = np.ones(self.num_point)
 
         return current_points, current_labels
+
+
+class UBCDatasetWholeScene():
+    """
+    Loader for whole scene data from las files.
+    """
+
+    DEBUG_MODE = False  # set to True to debug
+    NUM_CLASSES = 2  # now it is 2 because of our binary classification
+    CLASS_OF_INTEREST = 6
+    OFFSET_X = 480000
+    OFFSET_Y = 5455000
+    ROTATION_DEGREES = 28.000  # This is the rotation of UBC's roads relative to true north.
+    ROTATION_RADIANS = np.radians(ROTATION_DEGREES)
+    INVERSE_ROTATION_MATRIX = np.array([[np.cos(ROTATION_RADIANS), np.sin(ROTATION_RADIANS), 0],
+                                        [-np.sin(ROTATION_RADIANS), np.cos(ROTATION_RADIANS), 0],
+                                        [0, 0, 1]])
+    def __init__(self, root, block_points=8192, split='unclassified', stride=16.0, block_size=32.0, padding=0.001,
+                 preprocess=False):
+        self.block_points = block_points
+        self.block_size = block_size
+        self.padding = padding
+        self.root = root
+        self.split = split
+        self.stride = stride
+        self.preprocess = preprocess
+        self.scene_points_num = []
+        assert split in ['classified', 'unclassified', 'merged']
+        self.save_path = os.path.join(self.root, 'buildings_split')
+        self.las_path = os.path.join(self.root, 'las')
+        buffered_geojson = os.path.join(self.root, 'buffer.geojson')
+        buildings = json.load(open(buffered_geojson))['features']
+        # remove any buildings with a height less than 2
+        buildings = [building for building in buildings if (building['properties']['BLDG_HEIGHT'] is not None) and
+                     (building['properties']['BLDG_HEIGHT'] >= 3)]
+        self.list_of_building_uids = []
+        if self.preprocess:
+            """we follow a similar preprocessing step as above, but we need the *unclassified* data to be stored in 
+            the same folder as the *classified* data but with _unlabeled.npy instead of _points.npy"""
+            print('Preprocessing data %s (only running in the first time)...' % self.save_path)
+            points_data = []
+            colors_data = []
+            label_data = []
+            print("las processing...")
+            for filename in tqdm(os.listdir(self.las_path)):
+                if filename.endswith(".las"):
+                    xyz, rgb, l = read_las_file(os.path.join(self.las_path, filename))
+                    # only keeping unclassified and never classified points
+                    if self.split == 'classified':
+                        valid_indices = np.where((l != 0) & (l != 1) & (l != 7))
+                    elif self.split == 'unclassified':
+                        valid_indices = np.where((l == 0) | (l == 1))
+                    else:
+                        valid_indices = np.where((l != 7))
+                    xyz, rgb, l = xyz[valid_indices], rgb[valid_indices], l[valid_indices]
+                    rgb = rgb * (255.0 / 65535.0)
+                    l = (l == self.CLASS_OF_INTEREST).astype(int)  # make the labels binary
+                    points_data.append(xyz)
+                    colors_data.append(rgb)
+                    label_data.append(l)
+
+            # flatten the arrays to make them 2D
+            ply_data = np.concatenate(points_data, axis=0)
+            ply_data = np.concatenate((ply_data, np.concatenate(colors_data, axis=0)), axis=1)
+            label_data = np.concatenate(label_data, axis=0)
+            print("building processing...")
+            if self.split == 'classified':
+                raise NotImplementedError('Use the UBCDataset class for processing the classified data')
+            for index in tqdm(range(len(buildings)), total=len(buildings)):
+                building = buildings[index]
+                building_uid = building['properties']['BLDG_UID']
+                building_polygon = shape(building['geometry'])
+                if building_polygon.geom_type == 'MultiPolygon':
+                    bbox = building_polygon.bounds
+                    mask = (ply_data[:, 0] >= bbox[0]) & (ply_data[:, 0] <= bbox[2]) & \
+                           (ply_data[:, 1] >= bbox[1]) & (ply_data[:, 1] <= bbox[3])
+                    masked_labels = label_data[mask]
+                    points_with_index = list(enumerate(ply_data[mask]))
+                    points_in_bldg, idx_within_building = filter_points_in_multipolygon(points_with_index,
+                                                                                        building_polygon)
+                    # subtract offsets from x and y
+                    points_in_bldg = np.array(points_in_bldg)
+                    tmp = np.matmul(self.INVERSE_ROTATION_MATRIX,
+                                    np.array([points_in_bldg[:, 0] - self.OFFSET_X,
+                                              points_in_bldg[:, 1] - self.OFFSET_Y,
+                                              points_in_bldg[:, 2]]))
+                    points_in_bldg[:, 0], points_in_bldg[:, 1], points_in_bldg[:, 2] = tmp[0], tmp[1], tmp[2]
+                    if self.split == 'unclassified':
+                        building_file = os.path.join(self.save_path, building_uid + "_unlabeled.npy")
+                    else:
+                        building_file = os.path.join(self.save_path, building_uid + "_merged.npy")
+                    np.save(building_file, points_in_bldg)
+
+        # get the list of files
+        if self.split == 'classified':
+            # get the list of training buildings (same buildigns as above)
+            self.file_list = [os.path.join(self.save_path, filename) for filename in os.listdir(self.save_path) if
+                              filename.endswith('_points.npy')]
+            self.label_list = [os.path.join(self.save_path, filename) for filename in os.listdir(self.save_path) if
+                               filename.endswith('_labels.txt')]
+
+        elif self.split == 'unclassified':
+            # the testing data ends in "unlabeled.npy"
+            self.file_list = [os.path.join(self.save_path, filename) for filename in os.listdir(self.save_path) if
+                              filename.endswith('_unlabeled.npy')]
+        else:
+            # the merged data ends in "merged.npy"
+            self.file_list = [os.path.join(self.save_path, filename) for filename in os.listdir(self.save_path) if
+                              filename.endswith('_merged.npy')]
+
+        self.scene_points_list = []
+        # sort the file list and label list by the building uid
+        self.file_list.sort(key=lambda x: x.split('/')[-1].split('_')[0])
+        if self.split == 'classified':
+            self.label_list.sort(key=lambda x: x.split('/')[-1].split('_')[0])
+        self.semantic_labels_list = []
+        self.building_coord_min, self.building_coord_max = [], []
+        for index in tqdm(range(len(self.file_list)), total=len(self.file_list)):
+            data = np.load(self.file_list[index])
+            xyz = data[:, :3]
+            self.scene_points_list.append(data[:, :6])  # xyzrgb
+            if self.split == 'classified':
+                self.semantic_labels_list.append(np.loadtxt(self.label_list[index]).astype(np.uint8))
+            else:
+                # we don't have labels for the test data... we're trying to predict them!
+                self.semantic_labels_list.append(np.zeros(xyz.shape[0]).astype(np.uint8))
+            coord_min, coord_max = np.amin(xyz, axis=0)[:3], np.amax(xyz, axis=0)[:3]
+            self.building_coord_min.append(coord_min), self.building_coord_max.append(coord_max)
+        assert len(self.scene_points_list) == len(self.semantic_labels_list)
+
+        # calculate label weights
+        if self.split == 'classified':
+            labelweights = np.zeros(2)
+            for seg in self.semantic_labels_list:
+                tmp, _ = np.histogram(seg, range(3))
+                self.scene_points_num.append(seg.shape[0])
+                labelweights += tmp
+            labelweights = labelweights.astype(np.float32)
+            labelweights = labelweights / np.sum(labelweights)
+            self.labelweights = np.power(np.amax(labelweights) / labelweights, 1 / 3.0)
+        else:
+            # [0.4782623, 0.52173764] are the label weights for the overall training data
+            self.labelweights = np.array([0.4782623, 0.52173764])
+
+    def __getitem__(self, index):
+        point_set_init = self.scene_points_list[index]
+        points = point_set_init[:, :6]
+        labels = self.semantic_labels_list[index]
+        coord_min, coord_max = np.amin(points, axis=0)[:3], np.amax(points, axis=0)[:3]
+        grid_x = int(np.ceil(float(coord_max[0] - coord_min[0] - self.block_size) / self.stride) + 1)
+        grid_y = int(np.ceil(float(coord_max[1] - coord_min[1] - self.block_size) / self.stride) + 1)
+        data_building, label_building, sample_weight, index_building = np.array([]), np.array([]), np.array([]),  np.array([])
+        for index_y in range(0, grid_y):
+            for index_x in range(0, grid_x):
+                s_x = coord_min[0] + index_x * self.stride
+                e_x = min(s_x + self.block_size, coord_max[0])
+                s_x = e_x - self.block_size
+                s_y = coord_min[1] + index_y * self.stride
+                e_y = min(s_y + self.block_size, coord_max[1])
+                s_y = e_y - self.block_size
+                point_idxs = np.where(
+                    (points[:, 0] >= s_x - self.padding) & (points[:, 0] <= e_x + self.padding) & (
+                                points[:, 1] >= s_y - self.padding) & (
+                            points[:, 1] <= e_y + self.padding))[0]
+                if point_idxs.size == 0:
+                    continue
+                num_batch = int(np.ceil(point_idxs.size / self.block_points))
+                point_size = int(num_batch * self.block_points)
+                replace = False if (point_size - point_idxs.size <= point_idxs.size) else True
+                point_idxs_repeat = np.random.choice(point_idxs, point_size - point_idxs.size, replace=replace)
+                point_idxs = np.concatenate((point_idxs, point_idxs_repeat))
+                np.random.shuffle(point_idxs)
+                data_batch = points[point_idxs, :]
+                min_z = np.min(data_batch[:, 2])
+                data_batch[:, 0] = data_batch[:, 0] - (s_x + self.block_size / 2.0)
+                data_batch[:, 1] = data_batch[:, 1] - (s_y + self.block_size / 2.0)
+                data_batch[:, 2] = data_batch[:, 2] - min_z
+                normalized_xyz = np.zeros((point_size, 3))
+                coord_max_tmp = np.max(data_batch[:, 0:3], axis=0)
+                normalized_xyz[:, 0] = data_batch[:, 0] / coord_max_tmp[0]
+                normalized_xyz[:, 1] = data_batch[:, 1] / coord_max_tmp[1]
+                normalized_xyz[:, 2] = data_batch[:, 2] / coord_max_tmp[2]
+
+                data_batch = np.concatenate((data_batch, normalized_xyz), axis=1)
+                label_batch = labels[point_idxs].astype(int)
+                batch_weight = self.labelweights[label_batch]
+
+                data_building = np.vstack([data_building, data_batch]) if data_building.size else data_batch
+                label_building = np.hstack([label_building, label_batch]) if label_building.size else label_batch
+                sample_weight = np.hstack([sample_weight, batch_weight]) if sample_weight.size else batch_weight
+                index_building = np.hstack([index_building, point_idxs]) if index_building.size else point_idxs
+        data_building = data_building.reshape([-1, self.block_points, data_building.shape[1]])
+        label_building = label_building.reshape([-1, self.block_points])
+        sample_weight = sample_weight.reshape([-1, self.block_points])
+        index_building = index_building.reshape([-1, self.block_points])
+        return data_building, label_building, sample_weight, index_building
+
+    def __len__(self):
+        return len(self.scene_points_list)
