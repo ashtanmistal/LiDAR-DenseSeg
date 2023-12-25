@@ -2,6 +2,13 @@
 A pipeline for point cloud densification and architectural semantic segmentation for improving voxelization and mesh reconstruction quality of airborne LiDAR data. 
 
 > *This paper introduces LiDAR-DenseSeg, a novel framework designed to enhance voxelization and mesh reconstruction of airborne LiDAR data. The process involves three pivotal steps: Semantic segmentation, densification, and planar flattening of the point cloud. Using a modified PointNet++ architecture, the framework effectively segments point cloud data, focusing primarily on building structures and achieving an evaluation accuracy of 94.1% and a mean IoU of 0.89. Following segmentation, a recursive median split algorithm based on the SAPCU architecture densifies the point cloud, addressing the inherent sparsity in airborne LiDAR data. Planar flattening is proposed to further refine the process, reducing noise and enhancing voxelization quality. The paper presents empirical results demonstrating significant improvements in the voxelization and mesh reconstruction of airborne LiDAR data, contributing to the field of LiDAR data processing and 3D reconstruction.*
+
+
+This project contains submodules. To clone the repository, use the following command:
+
+```bash
+git clone --recurse-submodules https://github.com/ashtanmistal/LiDAR-DenseSeg.git
+```
         
 
 ___

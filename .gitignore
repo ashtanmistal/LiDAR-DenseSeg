@@ -1,12 +1,6 @@
 /src/classification/pointnetpp/data/
 /src/classification/pointnetpp/log/
-/src/densification/data/buildings_split/
-/src/densification/data/buildings_split_densified/
-/src/densification/alg/buildings_split/
-/src/densification/alg/buildings_out/
-/src/densification/alg/test/
-/src/densification/alg/testout/
-/data/
-/src/densification/alg/data_in/
-/src/densification/alg/data_out/
 *__pycache__/
+/src/densification/sapcu-recursive/data_in/
+/src/densification/sapcu-recursive/data_out/
+/data/
