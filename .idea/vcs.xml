@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/classification/pointnet2-ubc-semseg" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/src/densification/sapcu-recursive" vcs="Git" />
   </component>
 </project>
