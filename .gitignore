@@ -4,3 +4,5 @@
 /src/densification/sapcu-recursive/data_in/
 /src/densification/sapcu-recursive/data_out/
 /data/
+/src/classification/pointnet2-ubc-semseg/data/
+/src/classification/pointnet2-ubc-semseg/log/

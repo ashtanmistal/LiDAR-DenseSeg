@@ -8,10 +8,10 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/src/classification/pointnetpp/data_utils" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/src/classification/pointnetpp/log" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/classification/pointnetpp/models" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/densification/alg" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/postprocess_color" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/classification/pointnet2-ubc-semseg/log" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/data" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>

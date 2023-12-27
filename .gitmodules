@@ -1,3 +1,6 @@
 [submodule "src/densification/sapcu-recursive"]
 	path = src/densification/sapcu-recursive
 	url = https://github.com/ashtanmistal/sapcu-recursive.git
+[submodule "src/classification/pointnet2-ubc-semseg"]
+	path = src/classification/pointnet2-ubc-semseg
+	url = https://github.com/ashtanmistal/pointnet2-ubc-semseg.git

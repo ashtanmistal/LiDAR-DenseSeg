@@ -5,7 +5,7 @@
       <entry url="file://$PROJECT_DIR$">
         <entryData>
           <resourceRoots>
-            <path value="file://$PROJECT_DIR$/src/classification/pointnetpp/data" />
+            <path value="file://$PROJECT_DIR$/src/classification/pointnet2-ubc-semseg/data" />
             <path value="file://$PROJECT_DIR$/src/densification/data" />
             <path value="file://$PROJECT_DIR$/src/segmentation/data" />
           </resourceRoots>
