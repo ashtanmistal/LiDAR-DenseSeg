@@ -1,0 +1,139 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{MinecraftUBC}
+\citation{qi2017pointnet}
+\citation{sapcu}
+\providecommand \oddpage@label [2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}\hskip -1em.\nobreakspace  {}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:introduction}{{1}{1}{\hskip -1em.~Introduction}{section.1}{}}
+\newlabel{sec:introduction@cref}{{[section][1][]1}{[1][1][]1}}
+\@writefile{brf}{\backcite{MinecraftUBC}{{1}{1}{section.1}}}
+\@writefile{brf}{\backcite{qi2017pointnet}{{1}{1}{figure.caption.1}}}
+\@writefile{brf}{\backcite{sapcu}{{1}{1}{figure.caption.1}}}
+\citation{MinecraftUBC}
+\citation{qi2017pointnet}
+\citation{sapcu}
+\citation{chang2015shapenet,Occupancy_Networks}
+\citation{Occupancy_Networks}
+\citation{dgcnn}
+\citation{sapcu}
+\citation{ubcgeospatial}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The LiDAR-DenseSeg pipeline. Data streams are in white, data processing is in blue, deep learning tasks are in green, and mesh processing is in purple. The high quality point cloud is the output of the pipeline.\relax }}{2}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:pipeline}{{1}{2}{The LiDAR-DenseSeg pipeline. Data streams are in white, data processing is in blue, deep learning tasks are in green, and mesh processing is in purple. The high quality point cloud is the output of the pipeline.\relax }{figure.caption.1}{}}
+\newlabel{fig:pipeline@cref}{{[figure][1][]1}{[1][1][]2}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}\hskip -1em.\nobreakspace  {}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related-work}{{2}{2}{\hskip -1em.~Related Work}{section.2}{}}
+\newlabel{sec:related-work@cref}{{[section][2][]2}{[1][2][]2}}
+\@writefile{brf}{\backcite{MinecraftUBC}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{qi2017pointnet}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{sapcu}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{chang2015shapenet, Occupancy_Networks}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{Occupancy_Networks}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{dgcnn}{{2}{2}{section.2}}}
+\@writefile{brf}{\backcite{sapcu}{{2}{2}{section.2}}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}\hskip -1em.\nobreakspace  {}Methodology}{2}{section.3}\protected@file@percent }
+\newlabel{sec:methodology}{{3}{2}{\hskip -1em.~Methodology}{section.3}{}}
+\newlabel{sec:methodology@cref}{{[section][3][]3}{[1][2][]2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}\hskip -1em.\nobreakspace  {}Preprocessing}{2}{subsection.3.1}\protected@file@percent }
+\newlabel{subsec:preprocessing}{{3.1}{2}{\hskip -1em.~Preprocessing}{subsection.3.1}{}}
+\newlabel{subsec:preprocessing@cref}{{[subsection][1][3]3.1}{[1][2][]2}}
+\citation{qi2017pointnet}
+\citation{MinecraftUBC}
+\citation{sapcu}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The naive voxelization of the point cloud. The lack of complete labels leads to the voxelization not being a complete representation of the available point cloud data, and entire sections of the point cloud being lost in the voxelization process due to a lack of labels. Here, every single wall in the Pharmeceutical Sciences building is not captured in the voxelization.\relax }}{3}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:naive_voxelization}{{2}{3}{The naive voxelization of the point cloud. The lack of complete labels leads to the voxelization not being a complete representation of the available point cloud data, and entire sections of the point cloud being lost in the voxelization process due to a lack of labels. Here, every single wall in the Pharmeceutical Sciences building is not captured in the voxelization.\relax }{figure.caption.2}{}}
+\newlabel{fig:naive_voxelization@cref}{{[figure][2][]2}{[1][3][]3}}
+\@writefile{brf}{\backcite{ubcgeospatial}{{3}{3.1}{subsection.3.1}}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}\hskip -1em.\nobreakspace  {}Semantic Segmentation}{3}{subsection.3.2}\protected@file@percent }
+\newlabel{subsec:semantic-segmentation}{{3.2}{3}{\hskip -1em.~Semantic Segmentation}{subsection.3.2}{}}
+\newlabel{subsec:semantic-segmentation@cref}{{[subsection][2][3]3.2}{[1][3][]3}}
+\@writefile{brf}{\backcite{qi2017pointnet}{{3}{3.2}{figure.caption.2}}}
+\@writefile{brf}{\backcite{MinecraftUBC}{{3}{3.2}{figure.caption.2}}}
+\newlabel{eq:label_weights}{{1}{3}{\hskip -1em.~Semantic Segmentation}{equation.3.1}{}}
+\newlabel{eq:label_weights@cref}{{[equation][1][]1}{[1][3][]3}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The Walter Gage residence reconstructed using the naive voxelization algorithm used in MinecraftUBC. Note the lack of detail in the deck on a per-floor basis caused by the sparsity of the data.\relax }}{4}{figure.caption.3}\protected@file@percent }
+\newlabel{fig:walter_gage_minecraftubc}{{3}{4}{The Walter Gage residence reconstructed using the naive voxelization algorithm used in MinecraftUBC. Note the lack of detail in the deck on a per-floor basis caused by the sparsity of the data.\relax }{figure.caption.3}{}}
+\newlabel{fig:walter_gage_minecraftubc@cref}{{[figure][3][]3}{[1][4][]4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}\hskip -1em.\nobreakspace  {}Densification}{4}{subsection.3.3}\protected@file@percent }
+\newlabel{subsec:densification}{{3.3}{4}{\hskip -1em.~Densification}{subsection.3.3}{}}
+\newlabel{subsec:densification@cref}{{[subsection][3][3]3.3}{[1][3][]4}}
+\@writefile{brf}{\backcite{sapcu}{{4}{3.3}{subsection.3.3}}}
+\@writefile{loa}{\contentsline {algocf}{\numberline {1}{\ignorespaces Recursive Median Split Algorithm\relax }}{4}{algocf.1}\protected@file@percent }
+\newlabel{alg:recursive-median-split}{{1}{4}{\hskip -1em.~Densification}{algocf.1}{}}
+\newlabel{alg:recursive-median-split@cref}{{[algorithm][1][]1}{[1][4][]4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}\hskip -1em.\nobreakspace  {}Planar Flattening}{4}{subsection.3.4}\protected@file@percent }
+\newlabel{subsec:planar-flattening}{{3.4}{4}{\hskip -1em.~Planar Flattening}{subsection.3.4}{}}
+\newlabel{subsec:planar-flattening@cref}{{[subsection][4][3]3.4}{[1][4][]4}}
+\citation{dfcn}
+\citation{2019DataFusionContest}
+\citation{MinecraftUBC}
+\@writefile{loa}{\contentsline {algocf}{\numberline {2}{\ignorespaces Plane Detection Algorithm\relax }}{5}{algocf.2}\protected@file@percent }
+\newlabel{alg:plane-detection}{{2}{5}{\hskip -1em.~Planar Flattening}{algocf.2}{}}
+\newlabel{alg:plane-detection@cref}{{[algorithm][2][]2}{[1][4][]5}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}\hskip -1em.\nobreakspace  {}Results}{5}{section.4}\protected@file@percent }
+\newlabel{sec:results}{{4}{5}{\hskip -1em.~Results}{section.4}{}}
+\newlabel{sec:results@cref}{{[section][4][]4}{[1][5][]5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}\hskip -1em.\nobreakspace  {}Semantic Segmentation}{5}{subsection.4.1}\protected@file@percent }
+\newlabel{subsection:semantic-segmentation-results}{{4.1}{5}{\hskip -1em.~Semantic Segmentation}{subsection.4.1}{}}
+\newlabel{subsection:semantic-segmentation-results@cref}{{[subsection][1][4]4.1}{[1][5][]5}}
+\@writefile{brf}{\backcite{dfcn}{{5}{4.1}{subsection.4.1}}}
+\@writefile{brf}{\backcite{2019DataFusionContest}{{5}{4.1}{subsection.4.1}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Top: Ground truth segmentation of buildings (red) and non-buildings (green). Bottom: Semantic Segmentation of buildings (red) and non-buildings (green) by the model. The model fills in gaps in the building walls where data is available.\relax }}{5}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:initial-segmentation-results}{{4}{5}{Top: Ground truth segmentation of buildings (red) and non-buildings (green). Bottom: Semantic Segmentation of buildings (red) and non-buildings (green) by the model. The model fills in gaps in the building walls where data is available.\relax }{figure.caption.6}{}}
+\newlabel{fig:initial-segmentation-results@cref}{{[figure][4][]4}{[1][5][]5}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Ground truth (left) of labelled data, and merged segmentation (right) of the labelled data and unlabelled data.\relax }}{5}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:full-segmentation-results}{{5}{5}{Ground truth (left) of labelled data, and merged segmentation (right) of the labelled data and unlabelled data.\relax }{figure.caption.7}{}}
+\newlabel{fig:full-segmentation-results@cref}{{[figure][5][]5}{[1][5][]5}}
+\@writefile{brf}{\backcite{MinecraftUBC}{{5}{4.1}{subsection.4.1}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Semantic segmentation of a very large building, where the model incorrectly labels the roof as non-building.\relax }}{6}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:large-building-segmentation-results}{{6}{6}{Semantic segmentation of a very large building, where the model incorrectly labels the roof as non-building.\relax }{figure.caption.8}{}}
+\newlabel{fig:large-building-segmentation-results@cref}{{[figure][6][]6}{[1][6][]6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}\hskip -1em.\nobreakspace  {}Densification}{6}{subsection.4.2}\protected@file@percent }
+\newlabel{subsec:densification-results}{{4.2}{6}{\hskip -1em.~Densification}{subsection.4.2}{}}
+\newlabel{subsec:densification-results@cref}{{[subsection][2][4]4.2}{[1][6][]6}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Original labelled point cloud (left) and densification of the labelled point cloud (right). Though upsampling walls and roofs, the model amplifies noise from the segmentation task in the labelled point cloud.\relax }}{6}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:densification-results}{{7}{6}{Original labelled point cloud (left) and densification of the labelled point cloud (right). Though upsampling walls and roofs, the model amplifies noise from the segmentation task in the labelled point cloud.\relax }{figure.caption.9}{}}
+\newlabel{fig:densification-results@cref}{{[figure][7][]7}{[1][6][]6}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Visible split along recursive median lines in the densified point cloud. Split lines are visible both in ground data and building data\relax }}{6}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:median-split}{{8}{6}{Visible split along recursive median lines in the densified point cloud. Split lines are visible both in ground data and building data\relax }{figure.caption.10}{}}
+\newlabel{fig:median-split@cref}{{[figure][8][]8}{[1][6][]6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}\hskip -1em.\nobreakspace  {}Planar Flattening}{6}{subsection.4.3}\protected@file@percent }
+\newlabel{subsec:planar-flattening-results}{{4.3}{6}{\hskip -1em.~Planar Flattening}{subsection.4.3}{}}
+\newlabel{subsec:planar-flattening-results@cref}{{[subsection][3][4]4.3}{[1][6][]6}}
+\citation{qi2017pointnet,PytorchPointnetPointnet2}
+\citation{sapcu}
+\bibstyle{IEEEtran}
+\bibdata{LiDAR-DenseSeg}
+\bibcite{MinecraftUBC}{1}
+\bibcite{qi2017pointnet}{2}
+\bibcite{sapcu}{3}
+\bibcite{chang2015shapenet}{4}
+\bibcite{Occupancy_Networks}{5}
+\bibcite{dgcnn}{6}
+\bibcite{ubcgeospatial}{7}
+\bibcite{dfcn}{8}
+\bibcite{2019DataFusionContest}{9}
+\bibcite{PytorchPointnetPointnet2}{10}
+\@writefile{toc}{\contentsline {section}{\numberline {5}\hskip -1em.\nobreakspace  {}Conclusion}{7}{section.5}\protected@file@percent }
+\newlabel{sec:conclusion}{{5}{7}{\hskip -1em.~Conclusion}{section.5}{}}
+\newlabel{sec:conclusion@cref}{{[section][5][]5}{[1][6][]7}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}\hskip -1em.\nobreakspace  {}Acknowledgements}{7}{section.6}\protected@file@percent }
+\newlabel{sec:acknowledgements}{{6}{7}{\hskip -1em.~Acknowledgements}{section.6}{}}
+\newlabel{sec:acknowledgements@cref}{{[section][6][]6}{[1][7][]7}}
+\@writefile{brf}{\backcite{qi2017pointnet, PytorchPointnetPointnet2}{{7}{6}{section.6}}}
+\@writefile{brf}{\backcite{sapcu}{{7}{6}{section.6}}}
+\gdef \@abspage@last{7}

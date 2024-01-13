@@ -1,0 +1,20 @@
+        class PlaneDetector:
+            def detectPlanes(self, pointCloud, threshold):
+                unseen = pointCloud
+                planes = []
+                while len(unseen) > 0:
+                    point = randomChoice(unseen)
+                    k = 3
+                    initNeighbours = getNeighbours(point, k)
+                    prevPlane = fitPlane(initNeighbours)
+                    while True:
+                        neighbours = getNeighbours(point, k)
+                        plane = fitPlane(neighbours)
+                        if len(plane) > threshold:
+                            k += 1
+                            prevPlane = plane
+                        else:
+                            append(planes, prevPlane)
+                            remove(unseen, prevPlane.points)
+                            break
+                return planes
