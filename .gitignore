@@ -6,3 +6,4 @@
 /data/
 /src/classification/pointnet2-ubc-semseg/data/
 /src/classification/pointnet2-ubc-semseg/log/
+src/classification/pointnetpp/.DS_Store
